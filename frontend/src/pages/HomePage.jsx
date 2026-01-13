@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Info, X } from 'lucide-react'
+import { Sparkles, Info, X, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import ScriptEditor from '../components/script/ScriptEditor'
@@ -16,19 +16,27 @@ const LOADING_STEPS = [
   '이미지 찾는 중...'
 ]
 
+const ANALYZE_STEPS = [
+  '스크립트 분석중...',
+  '블록 생성 중...'
+]
+
 function HomePage() {
   const navigate = useNavigate()
   const [script, setScript] = useState('')
   const [title, setTitle] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState(null)
   const abortControllerRef = useRef(null)
   const loadingTimerRef = useRef(null)
 
+  const isLoading = isGenerating || isAnalyzing
+
   // 로딩 단계 자동 전환
   useEffect(() => {
-    if (isGenerating) {
+    if (isLoading) {
       setLoadingStep(0)
       // 5초 후 두 번째 단계로 전환
       loadingTimerRef.current = setTimeout(() => {
@@ -47,15 +55,80 @@ function HomePage() {
         clearTimeout(loadingTimerRef.current)
       }
     }
-  }, [isGenerating])
+  }, [isLoading])
 
   const handleCancel = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
       abortControllerRef.current = null
       toast.dismiss('generate')
-      toast('Generation cancelled', { icon: 'X' })
+      toast.dismiss('analyze')
+      toast('Cancelled', { icon: 'X' })
       setIsGenerating(false)
+      setIsAnalyzing(false)
+    }
+  }
+
+  // Analyze Script (2단계 워크플로우 - Step 1)
+  const handleAnalyze = async () => {
+    if (!script.trim()) {
+      toast.error('Please enter your script first')
+      return
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
+    setIsAnalyzing(true)
+    setError(null)
+
+    try {
+      logger.info('Starting script analysis', { scriptLength: script.length })
+
+      // 1. 프로젝트 생성
+      const createResponse = await projectApi.create({
+        script_raw: script,
+        title: title || undefined
+      })
+
+      const projectId = createResponse.data.id
+      logger.info('Project created', { projectId })
+
+      // 2. Split 실행 (분할만, 매칭 없이)
+      toast.loading('Analyzing script...', { id: 'analyze' })
+
+      await projectApi.split(projectId, {
+        signal: abortControllerRef.current.signal
+      })
+
+      toast.success('Analysis completed!', { id: 'analyze' })
+      logger.info('Split completed', { projectId })
+
+      // 3. 편집 페이지로 이동
+      navigate(`/project/${projectId}/edit`)
+
+    } catch (err) {
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+        logger.info('Analysis cancelled by user')
+        return
+      }
+
+      logger.error('Analysis failed', err)
+
+      let errorMessage = 'Failed to analyze script'
+      if (err.response?.data?.detail?.message) {
+        errorMessage = err.response.data.detail.message
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
+      setError(errorMessage)
+      toast.error(errorMessage, { id: 'analyze' })
+    } finally {
+      setIsAnalyzing(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -132,9 +205,9 @@ function HomePage() {
 
   return (
     <div className="flex-1 p-4 md:p-6">
-      {isGenerating && (
+      {isLoading && (
         <LoadingOverlay
-          message={LOADING_STEPS[loadingStep]}
+          message={isAnalyzing ? ANALYZE_STEPS[loadingStep] : LOADING_STEPS[loadingStep]}
           onCancel={handleCancel}
         />
       )}
@@ -210,20 +283,37 @@ function HomePage() {
                 </div>
               </div>
 
-              {/* Generate 버튼 */}
+              {/* Analyze Script 버튼 (2단계 워크플로우) */}
               <Button
-                onClick={handleGenerate}
-                loading={isGenerating}
-                disabled={!script.trim()}
-                icon={Sparkles}
+                onClick={handleAnalyze}
+                loading={isAnalyzing}
+                disabled={!script.trim() || isGenerating}
+                icon={FileText}
                 className="w-full"
                 size="lg"
               >
-                Generate Visuals
+                Analyze Script
+              </Button>
+
+              <p className="text-xs text-gray-500 text-center mt-2 mb-3">
+                Edit blocks before generating
+              </p>
+
+              {/* Quick Generate 버튼 */}
+              <Button
+                onClick={handleGenerate}
+                loading={isGenerating}
+                disabled={!script.trim() || isAnalyzing}
+                icon={Sparkles}
+                variant="outline"
+                className="w-full"
+                size="md"
+              >
+                Quick Generate
               </Button>
 
               <p className="text-xs text-gray-500 text-center mt-2">
-                Estimated time: 2-4 minutes
+                Skip editing (2-4 min)
               </p>
 
               {/* Pro Tip */}

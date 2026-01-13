@@ -45,7 +45,7 @@ export const projectApi = {
   get: (id) => api.get(`/projects/${id}`),
 
   /**
-   * Generate 실행 (LLM 의미론적 분할 + 에셋 매칭)
+   * Generate 실행 (LLM 의미론적 분할 + 에셋 매칭) - Quick Generate용
    * @param {string} id - 프로젝트 ID
    * @param {Object} options - { max_candidates_per_block?, signal? }
    */
@@ -53,6 +53,33 @@ export const projectApi = {
     const { signal, ...generateOptions } = options
     return api.post(`/projects/${id}/generate`, generateOptions, { signal })
   },
+
+  /**
+   * 스크립트 분할 (Step 1) - 에셋 매칭 없이 분할만
+   * @param {string} id - 프로젝트 ID
+   * @param {Object} options - { max_keywords?, signal? }
+   */
+  split: (id, options = {}) => {
+    const { signal, ...splitOptions } = options
+    return api.post(`/projects/${id}/split`, splitOptions, { signal })
+  },
+
+  /**
+   * 에셋 매칭 실행 (Step 2) - 영상 우선 검색
+   * @param {string} id - 프로젝트 ID
+   * @param {Object} options - { max_candidates_per_block?, video_priority?, signal? }
+   */
+  match: (id, options = {}) => {
+    const { signal, ...matchOptions } = options
+    return api.post(`/projects/${id}/match`, matchOptions, { signal })
+  },
+
+  /**
+   * 블록 합치기
+   * @param {string} id - 프로젝트 ID
+   * @param {string[]} blockIds - 합칠 블록 ID 목록
+   */
+  mergeBlocks: (id, blockIds) => api.post(`/projects/${id}/blocks/merge`, { block_ids: blockIds }),
 
   /**
    * 프로젝트의 블록 목록 조회
@@ -77,6 +104,20 @@ export const blockApi = {
    * @param {string} assetId - 에셋 ID
    */
   setPrimary: (blockId, assetId) => api.post(`/blocks/${blockId}/primary`, { asset_id: assetId }),
+
+  /**
+   * 블록 수정
+   * @param {string} blockId - 블록 ID
+   * @param {Object} data - { text?, keywords? }
+   */
+  update: (blockId, data) => api.put(`/blocks/${blockId}`, data),
+
+  /**
+   * 블록 나누기
+   * @param {string} blockId - 블록 ID
+   * @param {number} splitPosition - 나눌 위치 (문자 인덱스)
+   */
+  split: (blockId, splitPosition) => api.post(`/blocks/${blockId}/split`, { split_position: splitPosition }),
 }
 
 export default api

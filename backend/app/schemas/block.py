@@ -50,3 +50,19 @@ class BlockWithAssetResponse(BaseModel):
 class SetPrimaryRequest(BaseModel):
     """대표 에셋 선택 요청"""
     asset_id: str = Field(..., min_length=1)
+
+
+class BlockUpdate(BaseModel):
+    """블록 수정 요청"""
+    text: Optional[str] = Field(None, min_length=1)
+    keywords: Optional[List[str]] = None
+
+
+class BlockSplitRequest(BaseModel):
+    """블록 나누기 요청"""
+    split_position: int = Field(..., ge=1, description="나눌 위치 (문자 인덱스)")
+
+
+class BlockMergeRequest(BaseModel):
+    """블록 합치기 요청"""
+    block_ids: List[str] = Field(..., min_length=2, max_length=5, description="합칠 블록 ID 목록")

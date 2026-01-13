@@ -8,10 +8,11 @@ from app.database import Base
 
 class BlockStatus:
     """블록 상태 상수"""
-    PENDING = "PENDING"
-    MATCHED = "MATCHED"
-    NO_RESULT = "NO_RESULT"
-    CUSTOM = "CUSTOM"
+    DRAFT = "DRAFT"          # 분할 완료, 매칭 대기 (편집 가능)
+    PENDING = "PENDING"      # 매칭 진행 중
+    MATCHED = "MATCHED"      # 자동 매칭 완료
+    NO_RESULT = "NO_RESULT"  # 검색 결과 없음
+    CUSTOM = "CUSTOM"        # 사용자 선택
 
 
 class Block(Base):

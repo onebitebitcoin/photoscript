@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -56,6 +56,112 @@ async def get_block_assets(
             ))
 
     return result
+
+
+@router.put("/{block_id}", response_model=BlockResponse)
+async def update_block(
+    block_id: str,
+    request: BlockUpdate,
+    db: Session = Depends(get_db)
+):
+    """블록 텍스트/키워드 수정"""
+    logger.info(f"블록 수정: block_id={block_id}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    # 텍스트 수정
+    if request.text is not None:
+        block.text = request.text
+
+    # 키워드 수정
+    if request.keywords is not None:
+        block.keywords = request.keywords
+
+    # 상태를 DRAFT로 변경 (재매칭 필요)
+    block.status = BlockStatus.DRAFT
+
+    # 기존 에셋 연결 삭제 (재매칭 필요하므로)
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+
+    db.commit()
+    db.refresh(block)
+
+    logger.info(f"블록 수정 완료: block_id={block_id}")
+
+    return block
+
+
+@router.post("/{block_id}/split", response_model=List[BlockResponse])
+async def split_block(
+    block_id: str,
+    request: BlockSplitRequest,
+    db: Session = Depends(get_db)
+):
+    """블록을 두 개로 나누기"""
+    logger.info(f"블록 나누기: block_id={block_id}, position={request.split_position}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    text = block.text
+    position = request.split_position
+
+    # 위치 검증
+    if position <= 0 or position >= len(text):
+        raise HTTPException(
+            status_code=400,
+            detail={"message": f"유효하지 않은 위치입니다. 1 ~ {len(text)-1} 사이여야 합니다."}
+        )
+
+    # 텍스트 분할
+    first_text = text[:position].strip()
+    second_text = text[position:].strip()
+
+    if not first_text or not second_text:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "분할 후 빈 블록이 생성됩니다. 다른 위치를 선택해주세요."}
+        )
+
+    # 기존 블록-에셋 연결 삭제
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+
+    # 첫 번째 블록 업데이트
+    block.text = first_text
+    block.keywords = block.keywords[:3] if block.keywords else []  # 키워드 절반
+    block.status = BlockStatus.DRAFT
+
+    # 두 번째 블록 생성
+    new_block = Block(
+        project_id=block.project_id,
+        index=block.index + 1,
+        text=second_text,
+        keywords=block.keywords[3:] if block.keywords and len(block.keywords) > 3 else [],
+        status=BlockStatus.DRAFT
+    )
+    db.add(new_block)
+    db.commit()
+
+    # 후속 블록들 인덱스 업데이트
+    subsequent_blocks = db.query(Block).filter(
+        Block.project_id == block.project_id,
+        Block.index > block.index,
+        Block.id != new_block.id
+    ).order_by(Block.index).all()
+
+    for b in subsequent_blocks:
+        b.index += 1
+
+    db.commit()
+    db.refresh(block)
+    db.refresh(new_block)
+
+    logger.info(f"블록 나누기 완료: {block_id} → {block.id}, {new_block.id}")
+
+    return [block, new_block]
 
 
 @router.post("/{block_id}/primary", response_model=BlockResponse)

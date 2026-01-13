@@ -71,5 +71,31 @@ class GenerateResponse(BaseModel):
     blocks_count: int
 
 
+class SplitOptions(BaseModel):
+    """분할 옵션"""
+    max_keywords: Optional[int] = Field(5, ge=1, le=10)
+
+
+class SplitResponse(BaseModel):
+    """분할 응답"""
+    status: str
+    message: str
+    blocks_count: int
+    blocks: List[BlockSummary] = []
+
+
+class MatchOptions(BaseModel):
+    """매칭 옵션"""
+    max_candidates_per_block: Optional[int] = Field(10, ge=1, le=20)
+    video_priority: Optional[bool] = Field(True, description="영상 우선 검색 여부")
+
+
+class MatchResponse(BaseModel):
+    """매칭 응답"""
+    status: str
+    message: str
+    blocks_count: int
+
+
 # Forward reference 업데이트
 BlockSummary.model_rebuild()

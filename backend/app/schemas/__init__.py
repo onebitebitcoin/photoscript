@@ -3,12 +3,19 @@ from app.schemas.project import (
     ProjectResponse,
     ProjectDetailResponse,
     GenerateOptions,
-    GenerateResponse
+    GenerateResponse,
+    SplitOptions,
+    SplitResponse,
+    MatchOptions,
+    MatchResponse
 )
 from app.schemas.block import (
     BlockResponse,
     BlockWithAssetResponse,
-    SetPrimaryRequest
+    SetPrimaryRequest,
+    BlockUpdate,
+    BlockSplitRequest,
+    BlockMergeRequest
 )
 from app.schemas.asset import (
     AssetResponse,
@@ -21,9 +28,16 @@ __all__ = [
     "ProjectDetailResponse",
     "GenerateOptions",
     "GenerateResponse",
+    "SplitOptions",
+    "SplitResponse",
+    "MatchOptions",
+    "MatchResponse",
     "BlockResponse",
     "BlockWithAssetResponse",
     "SetPrimaryRequest",
+    "BlockUpdate",
+    "BlockSplitRequest",
+    "BlockMergeRequest",
     "AssetResponse",
     "BlockAssetResponse"
 ]
