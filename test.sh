@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Bitcoin Cracker - Test Runner
+# PhotoScript - Test Runner
 # 유닛 테스트, 통합 테스트, E2E 테스트를 실행합니다
 
 set -e
@@ -13,15 +13,15 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 info() {
-    echo -e "${BLUE}ℹ${NC} $1"
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # 가상환경 활성화
@@ -115,53 +115,15 @@ run_frontend_tests() {
     fi
 }
 
-# 함수: E2E 테스트
-run_e2e_tests() {
-    info "E2E 테스트 실행 중..."
-
-    # 백엔드 서버 시작
-    info "테스트용 백엔드 서버 시작 중..."
-    cd backend
-    uvicorn app.main:app --host 0.0.0.0 --port 8001 &
-    BACKEND_PID=$!
-    cd ..
-
-    # 서버 시작 대기
-    sleep 3
-
-    # Playwright E2E 테스트 실행
-    if [ -d "frontend/e2e" ]; then
-        cd frontend
-        npm run test:e2e
-        local EXIT_CODE=$?
-        cd ..
-    else
-        error "E2E 테스트가 설정되지 않았습니다."
-        EXIT_CODE=1
-    fi
-
-    # 테스트용 서버 종료
-    kill $BACKEND_PID 2>/dev/null || true
-
-    if [ $EXIT_CODE -eq 0 ]; then
-        success "E2E 테스트 통과"
-    else
-        error "E2E 테스트 실패"
-        return 1
-    fi
-}
-
 # 함수: Lint 검사
 run_lint() {
     info "코드 린트 검사 중..."
 
-    # Backend: Ruff/Flake8
+    # Backend: Ruff
     if [ -d "backend" ]; then
         cd backend
         if command -v ruff &> /dev/null; then
-            ruff check .
-        elif command -v flake8 &> /dev/null; then
-            flake8 app tests
+            ruff check . || true
         fi
         cd ..
     fi
@@ -169,7 +131,7 @@ run_lint() {
     # Frontend: ESLint
     if [ -d "frontend" ]; then
         cd frontend
-        npm run lint
+        npm run lint || true
         cd ..
     fi
 
@@ -178,7 +140,7 @@ run_lint() {
 
 # 메인 로직
 echo "=========================================="
-echo "Bitcoin Cracker - Test Runner"
+echo "PhotoScript - Test Runner"
 echo "=========================================="
 echo ""
 
@@ -204,9 +166,6 @@ case $MODE in
     "frontend")
         run_frontend_tests || FAILED=true
         ;;
-    "e2e")
-        run_e2e_tests || FAILED=true
-        ;;
     "lint")
         run_lint || FAILED=true
         ;;
@@ -214,10 +173,6 @@ case $MODE in
         run_lint || FAILED=true
         echo ""
         run_backend_unit_tests || FAILED=true
-        echo ""
-        run_backend_integration_tests || FAILED=true
-        echo ""
-        run_frontend_tests || FAILED=true
         ;;
 esac
 

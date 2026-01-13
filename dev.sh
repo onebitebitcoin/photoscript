@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Bitcoin Cracker - Development Server
+# PhotoScript - Development Server
 # 백엔드와 프론트엔드 개발 서버를 실행합니다
 
 set -e
@@ -18,15 +18,15 @@ FRONTEND_PID_FILE=".frontend.pid"
 
 # 함수: 메시지 출력
 info() {
-    echo -e "${BLUE}ℹ${NC} $1"
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
 success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # 함수: 서버 종료
@@ -53,6 +53,11 @@ cleanup() {
 
 # Ctrl+C 처리
 trap cleanup INT TERM
+
+# 로그 파일 초기화
+info "로그 파일 초기화 중..."
+rm -f backend/debug.log frontend/debug.log
+success "로그 파일 초기화 완료"
 
 # 함수: 백엔드 서버 시작
 start_backend() {
@@ -113,7 +118,7 @@ start_frontend() {
 
 # 메인 로직
 echo "=========================================="
-echo "Bitcoin Cracker - Development Server"
+echo "PhotoScript - Development Server"
 echo "=========================================="
 echo ""
 

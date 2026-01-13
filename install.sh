@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Bitcoin Cracker - Installation Script
+# PhotoScript - Installation Script
 # 프로젝트 의존성을 설치하고 환경을 설정합니다
 
 set -e  # 에러 발생 시 즉시 종료
 
 echo "=========================================="
-echo "Bitcoin Cracker - Installation"
+echo "PhotoScript - Installation"
 echo "=========================================="
 echo ""
 
@@ -18,17 +18,17 @@ NC='\033[0m' # No Color
 
 # 함수: 성공 메시지
 success() {
-    echo -e "${GREEN}✓${NC} $1"
+    echo -e "${GREEN}[OK]${NC} $1"
 }
 
 # 함수: 경고 메시지
 warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
+    echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 # 함수: 에러 메시지
 error() {
-    echo -e "${RED}✗${NC} $1"
+    echo -e "${RED}[ERROR]${NC} $1"
 }
 
 # 1. Node.js 확인
@@ -100,53 +100,15 @@ if [ ! -f ".env" ]; then
     if [ -f ".env.example" ]; then
         cp .env.example .env
         success ".env 파일 생성 완료"
-        warning "⚠ .env 파일을 열어서 환경 변수를 설정해주세요!"
+        warning ".env 파일을 열어서 API 키를 설정해주세요!"
+        echo "   - PEXELS_API_KEY: https://www.pexels.com/api/ 에서 발급"
+        echo "   - OPENAI_API_KEY: https://platform.openai.com/ 에서 발급"
     else
         warning ".env.example 파일이 없습니다."
         echo "   수동으로 .env 파일을 생성해주세요."
     fi
 else
     success ".env 파일이 이미 존재합니다."
-fi
-
-# 8. 데이터베이스 초기화 (선택사항)
-echo ""
-echo "8. 데이터베이스 초기화 (선택)..."
-if [ -f "backend/scripts/init_db.py" ]; then
-    read -p "데이터베이스를 초기화하시겠습니까? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cd backend
-        python scripts/init_db.py
-        cd ..
-        success "데이터베이스 초기화 완료"
-    else
-        warning "데이터베이스 초기화를 건너뜁니다."
-    fi
-else
-    warning "backend/scripts/init_db.py가 없습니다. 건너뜁니다."
-fi
-
-# 9. Git hooks 설정 (선택사항)
-echo ""
-echo "9. Git hooks 설정 (선택)..."
-if [ -d ".git" ]; then
-    read -p "Git pre-commit hook을 설정하시겠습니까? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # Pre-commit hook 생성
-        cat > .git/hooks/pre-commit << 'EOF'
-#!/bin/bash
-echo "Running tests before commit..."
-./test.sh unit
-if [ $? -ne 0 ]; then
-    echo "Tests failed. Commit aborted."
-    exit 1
-fi
-EOF
-        chmod +x .git/hooks/pre-commit
-        success "Git pre-commit hook 설정 완료"
-    fi
 fi
 
 # 완료
@@ -160,7 +122,4 @@ echo "  $ ./dev.sh"
 echo ""
 echo "테스트 실행:"
 echo "  $ ./test.sh"
-echo ""
-echo "배포:"
-echo "  $ ./deploy.sh"
 echo ""
