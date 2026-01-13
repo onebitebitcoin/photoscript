@@ -15,7 +15,7 @@ from app.schemas import (
     BlockResponse
 )
 from app.schemas.project import BlockSummary, AssetSummary
-from app.services import split_script, extract_keywords, PexelsClient, match_assets_for_block
+from app.services import split_script, extract_keywords, KeywordExtractionError, PexelsClient, match_assets_for_block
 from app.config import get_settings
 from app.utils.logger import logger
 
@@ -162,10 +162,12 @@ async def generate_visuals(
         try:
             keywords = await extract_keywords(text)
             block.keywords = keywords
-        except Exception as e:
+        except KeywordExtractionError as e:
             logger.error(f"키워드 추출 실패: {e}")
-            keywords = ["scene", "background"]
-            block.keywords = keywords
+            block.status = BlockStatus.NO_RESULT
+            block.keywords = []
+            db.commit()
+            continue  # 다음 블록으로
 
         # 4. 에셋 매칭
         try:

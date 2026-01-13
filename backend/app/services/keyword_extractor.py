@@ -7,6 +7,11 @@ from app.utils.logger import logger
 settings = get_settings()
 
 
+class KeywordExtractionError(Exception):
+    """키워드 추출 실패 예외"""
+    pass
+
+
 async def extract_keywords(text: str, max_keywords: int = 5) -> List[str]:
     """
     OpenAI GPT를 사용하여 텍스트에서 검색용 키워드 추출
@@ -17,12 +22,15 @@ async def extract_keywords(text: str, max_keywords: int = 5) -> List[str]:
 
     Returns:
         영어 키워드 리스트
+
+    Raises:
+        KeywordExtractionError: 키워드 추출 실패 시
     """
     logger.info(f"키워드 추출 시작: {len(text)}자 텍스트")
 
     if not settings.openai_api_key:
-        logger.warning("OpenAI API 키가 설정되지 않음. 기본 키워드 반환")
-        return ["scene", "background", "visual"]
+        logger.error("OpenAI API 키가 설정되지 않음")
+        raise KeywordExtractionError("OpenAI API 키가 설정되지 않았습니다. .env 파일을 확인하세요.")
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
@@ -55,39 +63,16 @@ async def extract_keywords(text: str, max_keywords: int = 5) -> List[str]:
         if not isinstance(keywords, list):
             raise ValueError("응답이 리스트가 아님")
 
+        if len(keywords) == 0:
+            raise ValueError("추출된 키워드가 없음")
+
         keywords = [str(k).strip() for k in keywords if k][:max_keywords]
         logger.info(f"키워드 추출 완료: {keywords}")
         return keywords
 
     except json.JSONDecodeError as e:
         logger.error(f"JSON 파싱 실패: {e}")
-        return extract_fallback_keywords(text)
+        raise KeywordExtractionError(f"키워드 추출 응답 파싱 실패: {e}")
     except Exception as e:
         logger.error(f"키워드 추출 실패: {e}")
-        return extract_fallback_keywords(text)
-
-
-def extract_fallback_keywords(text: str) -> List[str]:
-    """
-    OpenAI 실패 시 간단한 폴백 키워드 추출
-    """
-    logger.info("폴백 키워드 추출 사용")
-
-    # 간단한 키워드 추출: 긴 단어들 추출
-    words = text.split()
-    keywords = []
-
-    for word in words:
-        # 영어 단어만 추출
-        clean = ''.join(c for c in word if c.isalpha())
-        if len(clean) >= 4 and clean.isascii():
-            keywords.append(clean.lower())
-
-    # 중복 제거 및 상위 5개
-    unique_keywords = list(dict.fromkeys(keywords))[:5]
-
-    if not unique_keywords:
-        unique_keywords = ["scene", "background", "visual"]
-
-    logger.info(f"폴백 키워드: {unique_keywords}")
-    return unique_keywords
+        raise KeywordExtractionError(f"키워드 추출 실패: {e}")
