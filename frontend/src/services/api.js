@@ -3,7 +3,7 @@ import logger from '../utils/logger'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:7100/api/v1',
-  timeout: 60000, // Generate는 시간이 오래 걸릴 수 있음
+  timeout: 120000, // LLM + Pexels 매칭 시간 고려 (2분)
 })
 
 // Trailing slash 제거 인터셉터
@@ -45,11 +45,14 @@ export const projectApi = {
   get: (id) => api.get(`/projects/${id}`),
 
   /**
-   * Generate 실행 (분할 + 매칭)
+   * Generate 실행 (LLM 의미론적 분할 + 에셋 매칭)
    * @param {string} id - 프로젝트 ID
-   * @param {Object} options - { max_block_length?, max_candidates_per_block? }
+   * @param {Object} options - { max_candidates_per_block?, signal? }
    */
-  generate: (id, options = {}) => api.post(`/projects/${id}/generate`, options),
+  generate: (id, options = {}) => {
+    const { signal, ...generateOptions } = options
+    return api.post(`/projects/${id}/generate`, generateOptions, { signal })
+  },
 
   /**
    * 프로젝트의 블록 목록 조회

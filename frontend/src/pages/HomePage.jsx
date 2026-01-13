@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Info } from 'lucide-react'
+import { Sparkles, Info, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import ScriptEditor from '../components/script/ScriptEditor'
@@ -16,12 +16,29 @@ function HomePage() {
   const [title, setTitle] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState(null)
+  const abortControllerRef = useRef(null)
+
+  const handleCancel = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      toast.dismiss('generate')
+      toast('Generation cancelled', { icon: 'X' })
+      setIsGenerating(false)
+    }
+  }
 
   const handleGenerate = async () => {
     if (!script.trim()) {
       toast.error('Please enter your script first')
       return
     }
+
+    // 이전 요청 취소
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
 
     setIsGenerating(true)
     setError(null)
@@ -38,10 +55,12 @@ function HomePage() {
       const projectId = createResponse.data.id
       logger.info('Project created', { projectId })
 
-      // 2. Generate 실행
-      toast.loading('Generating visuals...', { id: 'generate' })
+      // 2. Generate 실행 (AbortController 전달)
+      toast.loading('Analyzing script and matching visuals...', { id: 'generate' })
 
-      await projectApi.generate(projectId)
+      await projectApi.generate(projectId, {
+        signal: abortControllerRef.current.signal
+      })
 
       toast.success('Visuals generated successfully!', { id: 'generate' })
       logger.info('Generate completed', { projectId })
@@ -50,19 +69,43 @@ function HomePage() {
       navigate(`/project/${projectId}`)
 
     } catch (err) {
+      // 취소된 요청은 무시
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+        logger.info('Generate cancelled by user')
+        return
+      }
+
       logger.error('Generate failed', err)
-      const errorMessage = err.response?.data?.detail?.message || err.message || 'Failed to generate visuals'
+
+      // 에러 메시지 파싱
+      let errorMessage = 'Failed to generate visuals'
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again with a shorter script.'
+      } else if (err.response?.data?.detail?.message) {
+        errorMessage = err.response.data.detail.message
+      } else if (err.response?.data?.detail) {
+        errorMessage = typeof err.response.data.detail === 'string'
+          ? err.response.data.detail
+          : JSON.stringify(err.response.data.detail)
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+
       setError(errorMessage)
       toast.error(errorMessage, { id: 'generate' })
     } finally {
       setIsGenerating(false)
+      abortControllerRef.current = null
     }
   }
 
   return (
     <div className="flex-1 p-4 md:p-6">
       {isGenerating && (
-        <LoadingOverlay message="Splitting script and matching visuals..." />
+        <LoadingOverlay
+          message="Analyzing script and matching visuals..."
+          onCancel={handleCancel}
+        />
       )}
 
       <div className="max-w-5xl mx-auto">

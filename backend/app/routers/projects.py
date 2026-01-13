@@ -15,7 +15,7 @@ from app.schemas import (
     BlockResponse
 )
 from app.schemas.project import BlockSummary, AssetSummary
-from app.services import split_script, extract_keywords, KeywordExtractionError, PexelsClient, match_assets_for_block
+from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block
 from app.config import get_settings
 from app.utils.logger import logger
 
@@ -110,7 +110,7 @@ async def generate_visuals(
     options: GenerateOptions = None,
     db: Session = Depends(get_db)
 ):
-    """블록 분할 + 키워드 추출 + 에셋 매칭 실행"""
+    """LLM으로 의미론적 블록 분할 + 키워드 추출 + 에셋 매칭 실행"""
     logger.info(f"Generate 시작: project_id={project_id}")
 
     project = db.query(Project).filter(Project.id == project_id).first()
@@ -121,18 +121,24 @@ async def generate_visuals(
     if options is None:
         options = GenerateOptions()
 
-    max_block_length = options.max_block_length or settings.max_block_length
     max_candidates = options.max_candidates_per_block or settings.max_candidates_per_block
 
     # 기존 블록/에셋 삭제
     db.query(Block).filter(Block.project_id == project_id).delete()
     db.commit()
 
-    # 1. 스크립트 분할
-    logger.info("Step 1: 스크립트 분할")
-    block_texts = split_script(project.script_raw, max_length=max_block_length)
+    # Step 1: LLM으로 의미론적 분할 + 키워드 추출 (한 번에)
+    logger.info("Step 1: LLM으로 스크립트 처리 (의미론적 분할 + 키워드 추출)")
+    try:
+        processed_blocks = await process_script(project.script_raw)
+    except ScriptProcessingError as e:
+        logger.error(f"스크립트 처리 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"스크립트 처리 실패: {str(e)}"}
+        )
 
-    if not block_texts:
+    if not processed_blocks:
         raise HTTPException(
             status_code=400,
             detail={"message": "스크립트를 분할할 수 없습니다. 내용을 확인해주세요."}
@@ -141,35 +147,35 @@ async def generate_visuals(
     # Pexels 클라이언트 초기화
     pexels_client = PexelsClient()
 
-    # 2. 각 블록 처리
-    logger.info(f"Step 2: {len(block_texts)}개 블록 처리 시작")
+    # Step 2: 각 블록에 대해 에셋 매칭
+    logger.info(f"Step 2: {len(processed_blocks)}개 블록 에셋 매칭 시작")
 
-    for idx, text in enumerate(block_texts):
-        logger.info(f"블록 {idx+1}/{len(block_texts)} 처리 중")
+    for idx, block_data in enumerate(processed_blocks):
+        logger.info(f"블록 {idx+1}/{len(processed_blocks)} 처리 중")
+
+        text = block_data["text"]
+        keywords = block_data.get("keywords", [])
 
         # 블록 생성
         block = Block(
             project_id=project_id,
             index=idx,
             text=text,
+            keywords=keywords,
             status=BlockStatus.PENDING
         )
         db.add(block)
         db.commit()
         db.refresh(block)
 
-        # 3. 키워드 추출
-        try:
-            keywords = await extract_keywords(text)
-            block.keywords = keywords
-        except KeywordExtractionError as e:
-            logger.error(f"키워드 추출 실패: {e}")
+        # 키워드가 없으면 NO_RESULT
+        if not keywords:
+            logger.warning(f"블록 {idx+1}: 키워드 없음")
             block.status = BlockStatus.NO_RESULT
-            block.keywords = []
             db.commit()
-            continue  # 다음 블록으로
+            continue
 
-        # 4. 에셋 매칭
+        # 에셋 매칭
         try:
             assets_data = await match_assets_for_block(
                 text, keywords, pexels_client, max_candidates=max_candidates
@@ -178,7 +184,7 @@ async def generate_visuals(
             logger.error(f"에셋 매칭 실패: {e}")
             assets_data = []
 
-        # 5. 에셋 저장
+        # 에셋 저장
         if assets_data:
             for i, asset_data in enumerate(assets_data):
                 # 에셋 저장 (또는 기존 에셋 조회)
@@ -218,12 +224,12 @@ async def generate_visuals(
 
         db.commit()
 
-    logger.info(f"Generate 완료: {len(block_texts)}개 블록 생성")
+    logger.info(f"Generate 완료: {len(processed_blocks)}개 블록 생성")
 
     return GenerateResponse(
         status="completed",
-        message=f"{len(block_texts)}개 블록 생성 및 매칭 완료",
-        blocks_count=len(block_texts)
+        message=f"{len(processed_blocks)}개 블록 생성 및 매칭 완료",
+        blocks_count=len(processed_blocks)
     )
 
 
