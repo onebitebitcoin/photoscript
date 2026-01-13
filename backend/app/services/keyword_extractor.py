@@ -48,9 +48,9 @@ async def extract_keywords(text: str, max_keywords: int = 5) -> List[str]:
 응답 형식 예시: ["sunset", "beach", "silhouette", "ocean", "golden hour"]"""
 
     try:
-        # Responses API 사용 (gpt-4o-mini)
+        # Responses API 사용 (gpt-5-mini)
         response = await client.responses.create(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             input=prompt
         )
 
