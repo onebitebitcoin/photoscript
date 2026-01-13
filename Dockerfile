@@ -46,12 +46,12 @@ ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
 
 # Expose port (Railway provides PORT env var)
-EXPOSE 8000
+EXPOSE 7100
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-7100}/health || exit 1
 
 # Start server
 # Railway injects PORT env var automatically
-CMD ["sh", "-c", "cd backend && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "cd backend && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7100}"]

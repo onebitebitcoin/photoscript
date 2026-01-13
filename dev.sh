@@ -84,14 +84,14 @@ start_backend() {
     cd backend
 
     # Uvicorn으로 FastAPI 서버 시작
-    uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+    uvicorn app.main:app --reload --host 0.0.0.0 --port 7100 &
     BACKEND_PID=$!
     echo $BACKEND_PID > ../$BACKEND_PID_FILE
 
     cd ..
 
-    success "백엔드 서버 시작됨 (PID: $BACKEND_PID, Port: 8000)"
-    echo "   API 문서: http://localhost:8000/docs"
+    success "백엔드 서버 시작됨 (PID: $BACKEND_PID, Port: 7100)"
+    echo "   API 문서: http://localhost:7100/docs"
 }
 
 # 함수: 프론트엔드 서버 시작
@@ -112,8 +112,8 @@ start_frontend() {
 
     cd ..
 
-    success "프론트엔드 서버 시작됨 (PID: $FRONTEND_PID, Port: 3000)"
-    echo "   브라우저: http://localhost:3000"
+    success "프론트엔드 서버 시작됨 (PID: $FRONTEND_PID, Port: 7101)"
+    echo "   브라우저: http://localhost:7101"
 }
 
 # 메인 로직

@@ -2,7 +2,7 @@ import axios from 'axios'
 import logger from '../utils/logger'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:7100/api/v1',
   timeout: 60000, // Generate는 시간이 오래 걸릴 수 있음
 })
 
