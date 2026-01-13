@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Info, X } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -10,13 +10,44 @@ import ErrorAlert from '../components/common/ErrorAlert'
 import { projectApi } from '../services/api'
 import logger from '../utils/logger'
 
+// 로딩 단계별 메시지
+const LOADING_STEPS = [
+  '스크립트 분석중...',
+  '이미지 찾는 중...'
+]
+
 function HomePage() {
   const navigate = useNavigate()
   const [script, setScript] = useState('')
   const [title, setTitle] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState(null)
   const abortControllerRef = useRef(null)
+  const loadingTimerRef = useRef(null)
+
+  // 로딩 단계 자동 전환
+  useEffect(() => {
+    if (isGenerating) {
+      setLoadingStep(0)
+      // 5초 후 두 번째 단계로 전환
+      loadingTimerRef.current = setTimeout(() => {
+        setLoadingStep(1)
+      }, 5000)
+    } else {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current)
+        loadingTimerRef.current = null
+      }
+      setLoadingStep(0)
+    }
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current)
+      }
+    }
+  }, [isGenerating])
 
   const handleCancel = () => {
     if (abortControllerRef.current) {
@@ -56,7 +87,7 @@ function HomePage() {
       logger.info('Project created', { projectId })
 
       // 2. Generate 실행 (AbortController 전달)
-      toast.loading('Analyzing script and matching visuals...', { id: 'generate' })
+      toast.loading('Generating...', { id: 'generate' })
 
       await projectApi.generate(projectId, {
         signal: abortControllerRef.current.signal
@@ -103,7 +134,7 @@ function HomePage() {
     <div className="flex-1 p-4 md:p-6">
       {isGenerating && (
         <LoadingOverlay
-          message="Analyzing script and matching visuals..."
+          message={LOADING_STEPS[loadingStep]}
           onCancel={handleCancel}
         />
       )}

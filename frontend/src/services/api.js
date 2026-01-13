@@ -3,7 +3,7 @@ import logger from '../utils/logger'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:7100/api/v1',
-  timeout: 120000, // LLM + Pexels 매칭 시간 고려 (2분)
+  timeout: 300000, // LLM + Pexels 매칭 시간 고려 (5분)
 })
 
 // Trailing slash 제거 인터셉터
