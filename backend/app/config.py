@@ -1,6 +1,25 @@
 import os
+from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+
+def find_env_file() -> Optional[str]:
+    """개발/배포 환경에서 .env 파일 경로 찾기"""
+    # 시도할 경로 목록 (우선순위 순)
+    possible_paths = [
+        Path(__file__).parent.parent.parent.parent / ".env",  # 프로젝트 루트
+        Path(__file__).parent.parent.parent / ".env",  # backend 폴더
+        Path(".env"),  # 현재 디렉토리
+        Path("../.env"),  # 상위 디렉토리
+    ]
+
+    for path in possible_paths:
+        if path.exists():
+            return str(path)
+
+    return None  # 환경변수로만 설정됨 (배포 환경)
 
 
 class Settings(BaseSettings):
@@ -24,8 +43,9 @@ class Settings(BaseSettings):
     max_candidates_per_block: int = 10
 
     class Config:
-        env_file = ".env"
+        env_file = find_env_file()
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 
 @lru_cache()
