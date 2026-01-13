@@ -109,6 +109,56 @@ app.add_middleware(
 - 개발 환경에서는 편의를 위해 모든 origin 허용
 - 프로덕션 환경에서는 보안을 위해 특정 origin만 허용하도록 변경 필요
 
+### Trailing Slash 통일 (CRITICAL)
+**Frontend와 Backend에서 URL trailing slash를 반드시 통일해야 한다.**
+
+`/api/users`와 `/api/users/`는 다른 URL로 처리될 수 있어 404 에러의 원인이 됨.
+
+**규칙: Trailing Slash 없이 통일**
+
+```
+✅ 올바른 예시:
+/api/v1/portfolio/summary
+/api/v1/trades
+/api/v1/stocks/AAPL
+
+❌ 잘못된 예시:
+/api/v1/portfolio/summary/
+/api/v1/trades/
+/api/v1/stocks/AAPL/
+```
+
+**Backend (FastAPI) 설정:**
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+# Trailing slash redirect 비활성화
+app.router.redirect_slashes = False
+```
+
+**Frontend (Axios) 설정:**
+```javascript
+// API 호출 시 trailing slash 제거
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+});
+
+// URL 정규화 (trailing slash 제거)
+api.interceptors.request.use((config) => {
+  if (config.url && config.url.endsWith('/')) {
+    config.url = config.url.slice(0, -1);
+  }
+  return config;
+});
+```
+
+**체크리스트:**
+- [ ] Backend API 엔드포인트에 trailing slash 없음
+- [ ] Frontend API 호출 URL에 trailing slash 없음
+- [ ] SPEC.md API Design 섹션 URL 형식 통일
+
 ## Git
 4) git commit message는 알아서 만들 것
    - 변경 내용 기반으로 명확한 메시지를 자동 생성
