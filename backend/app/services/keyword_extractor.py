@@ -40,14 +40,13 @@ async def extract_keywords(text: str, max_keywords: int = 5) -> List[str]:
 응답 형식 예시: ["sunset", "beach", "silhouette", "ocean", "golden hour"]"""
 
     try:
-        response = await client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=200
+        # Responses API 사용 (gpt-4o-mini)
+        response = await client.responses.create(
+            model="gpt-4o-mini",
+            input=prompt
         )
 
-        content = response.choices[0].message.content.strip()
+        content = response.output_text.strip()
         logger.debug(f"OpenAI 응답: {content}")
 
         # JSON 파싱
