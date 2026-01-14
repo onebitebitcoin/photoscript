@@ -190,13 +190,15 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                 <div className="grid grid-cols-4 gap-2">
                   {assets.map((item) => {
                     const asset = item.asset || item
+                    const hasPrimary = assets.some(a => a.is_primary)
+                    const isDimmed = hasPrimary && !item.is_primary
                     return (
                       <div
                         key={item.id}
                         onClick={() => setModalAsset(asset)}
-                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden cursor-pointer group ${
+                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden cursor-pointer group transition-all ${
                           item.is_primary ? 'ring-2 ring-primary' : ''
-                        }`}
+                        } ${isDimmed ? 'opacity-40' : ''}`}
                       >
                         <img
                           src={asset.thumbnail_url}
