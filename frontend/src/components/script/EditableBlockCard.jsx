@@ -67,21 +67,20 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
   // 개별 블록 에셋 검색
   const handleSearch = async () => {
     if (!block.keywords?.length) {
-      alert('키워드가 없습니다. 먼저 키워드를 추가해주세요.')
+      toast.error('키워드가 없습니다. 먼저 키워드를 추가해주세요.')
       return
     }
 
     setIsSearching(true)
     try {
       await blockApi.match(block.id, { video_priority: true })
-      // 에셋 다시 로드
+      // 에셋 다시 로드 (로컬 상태만 업데이트)
       const { data } = await blockApi.getAssets(block.id)
-      setAssets(data.slice(0, 4))
-      // 부모에 변경 알림
-      if (onBlockChange) onBlockChange()
+      setAssets(data.slice(0, 8))
+      toast.success(`${data.length}개 에셋 찾음`)
     } catch (err) {
       console.error('Failed to search assets:', err)
-      alert(err.response?.data?.detail?.message || '에셋 검색에 실패했습니다.')
+      toast.error(err.response?.data?.detail?.message || '에셋 검색에 실패했습니다.')
     } finally {
       setIsSearching(false)
     }
@@ -410,12 +409,12 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                     </span>
                   </div>
                   <a
-                    href={modalAsset.source_url}
+                    href={modalAsset.meta?.page_url || modalAsset.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-primary hover:underline"
                   >
-                    Open original
+                    Open in Pexels
                   </a>
                 </div>
                 {modalAsset.title && (

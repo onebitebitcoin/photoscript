@@ -107,6 +107,7 @@ class PexelsClient:
                 "photographer": photo.get("photographer"),
                 "photographer_url": photo.get("photographer_url"),
                 "pexels_id": photo.get("id"),
+                "page_url": photo.get("url"),  # Pexels 웹페이지 URL
                 "width": photo.get("width"),
                 "height": photo.get("height")
             }
@@ -136,6 +137,7 @@ class PexelsClient:
             "meta": {
                 "duration": video.get("duration"),
                 "pexels_id": video.get("id"),
+                "page_url": video.get("url"),  # Pexels 웹페이지 URL
                 "width": best_file.get("width") if best_file else None,
                 "height": best_file.get("height") if best_file else None,
                 "user": video.get("user", {}).get("name")
