@@ -92,13 +92,12 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
     setSelectingAssetId(assetId)
     try {
       await blockApi.setPrimary(block.id, assetId)
-      // 로컬 상태 업데이트
+      // 로컬 상태만 업데이트 (페이지 새로고침 없이)
       setAssets(prev => prev.map(a => ({
         ...a,
         is_primary: a.asset_id === assetId
       })))
       toast.success('Selected')
-      if (onBlockChange) onBlockChange()
     } catch (err) {
       console.error('Failed to select asset:', err)
       toast.error('Failed to select')
