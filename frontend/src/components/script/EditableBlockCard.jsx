@@ -424,12 +424,11 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                     </span>
                   </div>
                   <a
-                    href={modalAsset.meta?.page_url || modalAsset.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    href={modalAsset.source_url}
+                    download
                     className="text-xs text-primary hover:underline"
                   >
-                    Open in Pexels
+                    Download
                   </a>
                 </div>
                 {modalAsset.title && (
