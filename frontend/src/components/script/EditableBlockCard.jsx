@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Edit2, Scissors, Check, X, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
+import { blockApi } from '../../services/api'
 
 /**
  * 편집 가능한 블록 카드 컴포넌트
@@ -8,14 +9,17 @@ import KeywordEditor from './KeywordEditor'
  * @param {boolean} isSelected - 선택 여부
  * @param {function} onSelect - 선택 토글 콜백
  * @param {function} onUpdate - 블록 업데이트 콜백
- * @param {function} onSplit - 블록 나누기 콜백
+ * @param {function} onBlockChange - 블록 변경 시 부모에 알림 (매칭 완료 등)
  */
-function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onSplit }) {
+function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChange }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const [text, setText] = useState(block.text)
   const [keywords, setKeywords] = useState(block.keywords || [])
   const [isSaving, setIsSaving] = useState(false)
+  const [assets, setAssets] = useState([])
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -35,21 +39,47 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onSplit }) {
     setIsEditing(false)
   }
 
-  const handleSplit = () => {
-    // 중간 지점에서 나누기
-    const midPoint = Math.floor(text.length / 2)
-    // 가장 가까운 문장 끝이나 공백 찾기
-    let splitPoint = midPoint
-    const sentenceEnd = text.indexOf('.', midPoint)
-    const newline = text.indexOf('\n', midPoint)
+  // 에셋 로드 (이미 매칭된 경우)
+  useEffect(() => {
+    const loadAssets = async () => {
+      if (block.status === 'MATCHED' || block.status === 'CUSTOM') {
+        setIsLoadingAssets(true)
+        try {
+          const { data } = await blockApi.getAssets(block.id)
+          setAssets(data.slice(0, 4)) // 최대 4개만 미리보기
+        } catch (err) {
+          console.error('Failed to load assets:', err)
+        } finally {
+          setIsLoadingAssets(false)
+        }
+      } else {
+        setAssets([])
+      }
+    }
+    loadAssets()
+  }, [block.id, block.status])
 
-    if (sentenceEnd > 0 && sentenceEnd < midPoint + 100) {
-      splitPoint = sentenceEnd + 1
-    } else if (newline > 0 && newline < midPoint + 50) {
-      splitPoint = newline + 1
+  // 개별 블록 에셋 검색
+  const handleSearch = async () => {
+    if (!block.keywords?.length) {
+      alert('키워드가 없습니다. 먼저 키워드를 추가해주세요.')
+      return
     }
 
-    onSplit(block.id, splitPoint)
+    setIsSearching(true)
+    try {
+      await blockApi.match(block.id, { video_priority: true })
+      // 에셋 다시 로드
+      const { data } = await blockApi.getAssets(block.id)
+      setAssets(data.slice(0, 4))
+      // 부모에 변경 알림
+      if (onBlockChange) onBlockChange()
+    } catch (err) {
+      console.error('Failed to search assets:', err)
+      alert(err.response?.data?.detail?.message || '에셋 검색에 실패했습니다.')
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   return (
@@ -93,11 +123,16 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onSplit }) {
                 <Edit2 className="w-4 h-4 text-gray-400" />
               </button>
               <button
-                onClick={handleSplit}
-                className="p-1.5 hover:bg-dark-hover rounded transition-colors"
-                title="Split"
+                onClick={handleSearch}
+                disabled={isSearching}
+                className="p-1.5 hover:bg-dark-hover rounded transition-colors disabled:opacity-50"
+                title="Search visuals"
               >
-                <Scissors className="w-4 h-4 text-gray-400" />
+                {isSearching ? (
+                  <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                ) : (
+                  <Search className="w-4 h-4 text-gray-400" />
+                )}
               </button>
             </>
           )}
@@ -140,6 +175,52 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onSplit }) {
               maxKeywords={10}
             />
           </div>
+
+          {/* 에셋 미리보기 */}
+          {!isEditing && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">Visuals</p>
+              {isLoadingAssets ? (
+                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Loading...</span>
+                </div>
+              ) : assets.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {assets.map((item) => {
+                    const asset = item.asset || item
+                    return (
+                      <div
+                        key={item.id}
+                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden ${
+                          item.is_primary ? 'ring-2 ring-primary' : ''
+                        }`}
+                      >
+                        <img
+                          src={asset.thumbnail_url}
+                          alt={asset.title || 'Thumbnail'}
+                          className="w-full h-full object-cover"
+                        />
+                        <span className={`absolute top-0.5 right-0.5 p-0.5 rounded ${
+                          asset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
+                        }`}>
+                          {asset.asset_type === 'VIDEO' ? (
+                            <Video className="w-2.5 h-2.5 text-white" />
+                          ) : (
+                            <Image className="w-2.5 h-2.5 text-white" />
+                          )}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  No visuals yet. Click search to find.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 편집 모드 버튼 */}
           {isEditing && (

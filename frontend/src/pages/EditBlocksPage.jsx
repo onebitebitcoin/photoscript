@@ -5,6 +5,7 @@ import { projectApi, blockApi } from '../services/api'
 import EditableBlockCard from '../components/script/EditableBlockCard'
 import Button from '../components/common/Button'
 import logger from '../utils/logger'
+import toast from 'react-hot-toast'
 
 /**
  * 블록 편집 페이지
@@ -63,6 +64,7 @@ function EditBlocksPage() {
         prev.map(b => b.id === blockId ? { ...b, ...updatedBlock } : b)
       )
       logger.info('Block updated', { blockId })
+      toast.success('Block updated')
     } catch (err) {
       const message = err.response?.data?.detail?.message || err.message
       logger.error('Failed to update block', { blockId, error: message })
@@ -70,18 +72,10 @@ function EditBlocksPage() {
     }
   }
 
-  // 블록 나누기
-  const handleSplitBlock = async (blockId, splitPosition) => {
-    try {
-      const { data: newBlocks } = await blockApi.split(blockId, splitPosition)
-      // 블록 목록 다시 로드
-      await loadProject()
-      logger.info('Block split', { blockId, newBlocksCount: newBlocks.length })
-    } catch (err) {
-      const message = err.response?.data?.detail?.message || err.message
-      setError(message)
-      logger.error('Failed to split block', { blockId, error: message })
-    }
+  // 블록 변경 시 프로젝트 다시 로드
+  const handleBlockChange = async () => {
+    await loadProject()
+    toast.success('Visuals updated')
   }
 
   // 블록 합치기
@@ -224,7 +218,7 @@ function EditBlocksPage() {
               isSelected={selectedIds.includes(block.id)}
               onSelect={handleSelect}
               onUpdate={handleUpdateBlock}
-              onSplit={handleSplitBlock}
+              onBlockChange={handleBlockChange}
             />
           ))}
         </div>

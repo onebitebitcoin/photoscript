@@ -118,6 +118,13 @@ export const blockApi = {
    * @param {number} splitPosition - 나눌 위치 (문자 인덱스)
    */
   split: (blockId, splitPosition) => api.post(`/blocks/${blockId}/split`, { split_position: splitPosition }),
+
+  /**
+   * 단일 블록 에셋 매칭
+   * @param {string} blockId - 블록 ID
+   * @param {Object} options - { video_priority?, max_candidates_per_block? }
+   */
+  match: (blockId, options = {}) => api.post(`/blocks/${blockId}/match`, options),
 }
 
 export default api

@@ -6,7 +6,10 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions
+from app.services.matcher import match_assets_for_block
+from app.services.pexels_client import PexelsClient
+from app.config import get_settings
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -206,5 +209,103 @@ async def set_primary_asset(
     db.refresh(block)
 
     logger.info(f"대표 에셋 선택 완료: block_id={block_id}")
+
+    return block
+
+
+@router.post("/{block_id}/match", response_model=BlockResponse)
+async def match_single_block(
+    block_id: str,
+    options: MatchOptions = None,
+    db: Session = Depends(get_db)
+):
+    """단일 블록 에셋 매칭"""
+    logger.info(f"단일 블록 매칭 시작: block_id={block_id}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    # 키워드가 없으면 에러
+    if not block.keywords:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "키워드가 없습니다. 먼저 키워드를 추가해주세요."}
+        )
+
+    # 옵션 설정
+    if options is None:
+        options = MatchOptions()
+
+    settings = get_settings()
+    max_candidates = options.max_candidates_per_block or settings.max_candidates_per_block
+    video_priority = options.video_priority if options.video_priority is not None else True
+
+    # 기존 블록-에셋 연결 삭제
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+    db.commit()
+
+    # Pexels 클라이언트 초기화 및 에셋 매칭
+    pexels_client = PexelsClient()
+
+    try:
+        assets_data = await match_assets_for_block(
+            block.text,
+            block.keywords,
+            pexels_client,
+            max_candidates=max_candidates,
+            video_priority=video_priority
+        )
+    except Exception as e:
+        logger.error(f"에셋 매칭 실패: {e}")
+        block.status = BlockStatus.NO_RESULT
+        db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"에셋 매칭 중 오류가 발생했습니다: {str(e)}"}
+        )
+
+    # 에셋 저장
+    if assets_data:
+        for i, asset_data in enumerate(assets_data):
+            # 에셋 저장 (또는 기존 에셋 조회)
+            existing_asset = db.query(Asset).filter(
+                Asset.source_url == asset_data["source_url"]
+            ).first()
+
+            if existing_asset:
+                asset = existing_asset
+            else:
+                asset = Asset(
+                    provider=asset_data["provider"],
+                    asset_type=asset_data["asset_type"],
+                    source_url=asset_data["source_url"],
+                    thumbnail_url=asset_data["thumbnail_url"],
+                    title=asset_data.get("title"),
+                    license=asset_data.get("license"),
+                    meta=asset_data.get("meta")
+                )
+                db.add(asset)
+                db.commit()
+                db.refresh(asset)
+
+            # 블록-에셋 연결
+            block_asset = BlockAsset(
+                block_id=block.id,
+                asset_id=asset.id,
+                score=asset_data.get("score", 0.0),
+                is_primary=(i == 0),
+                chosen_by=ChosenBy.AUTO
+            )
+            db.add(block_asset)
+
+        block.status = BlockStatus.MATCHED
+    else:
+        block.status = BlockStatus.NO_RESULT
+
+    db.commit()
+    db.refresh(block)
+
+    logger.info(f"단일 블록 매칭 완료: block_id={block_id}, assets_count={len(assets_data)}")
 
     return block
