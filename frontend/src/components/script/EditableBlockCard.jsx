@@ -25,6 +25,7 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
   const [searchKeyword, setSearchKeyword] = useState('') // 키워드 검색용
   const [isKeywordSearching, setIsKeywordSearching] = useState(false)
   const [selectingAssetId, setSelectingAssetId] = useState(null) // 선택 중인 에셋
+  const [showCount, setShowCount] = useState(4) // 표시할 에셋 개수
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -51,7 +52,8 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
         setIsLoadingAssets(true)
         try {
           const { data } = await blockApi.getAssets(block.id)
-          setAssets(data.slice(0, 4)) // 최대 4개만 미리보기
+          setAssets(data) // 전체 저장
+          setShowCount(4) // 초기 표시 개수 리셋
         } catch (err) {
           console.error('Failed to load assets:', err)
         } finally {
@@ -76,7 +78,8 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
       await blockApi.match(block.id, { video_priority: true })
       // 에셋 다시 로드 (로컬 상태만 업데이트)
       const { data } = await blockApi.getAssets(block.id)
-      setAssets(data.slice(0, 8))
+      setAssets(data)
+      setShowCount(4)
       toast.success(`${data.length}개 에셋 찾음`)
     } catch (err) {
       console.error('Failed to search assets:', err)
@@ -116,8 +119,8 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
     try {
       const { data: newAssets } = await blockApi.search(block.id, searchKeyword.trim(), { video_priority: true })
       if (newAssets.length > 0) {
-        // 기존 에셋에 새 에셋 추가 (최대 8개까지)
-        setAssets(prev => [...prev, ...newAssets].slice(0, 8))
+        // 기존 에셋에 새 에셋 추가
+        setAssets(prev => [...prev, ...newAssets])
         toast.success(`${newAssets.length}개 에셋 추가됨`)
       } else {
         toast.error('검색 결과가 없습니다')
@@ -235,76 +238,87 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                   <span>Loading...</span>
                 </div>
               ) : assets.length > 0 ? (
-                <div className="grid grid-cols-4 gap-2">
-                  {assets.map((item) => {
-                    const asset = item.asset || item
-                    const hasPrimary = assets.some(a => a.is_primary)
-                    const isDimmed = hasPrimary && !item.is_primary
-                    const isSelecting = selectingAssetId === item.asset_id
-                    return (
-                      <div
-                        key={item.id}
-                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden group transition-all ${
-                          item.is_primary ? 'ring-2 ring-primary' : ''
-                        } ${isDimmed ? 'opacity-40 hover:opacity-100' : ''}`}
-                      >
-                        <img
-                          src={asset.thumbnail_url}
-                          alt={asset.title || 'Thumbnail'}
-                          className="w-full h-full object-cover"
-                        />
-                        {/* 호버 시 버튼 오버레이 */}
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                          {/* 선택 버튼 */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleSelectAsset(item.asset_id)
-                            }}
-                            disabled={isSelecting || item.is_primary}
-                            className={`p-1.5 rounded transition-colors ${
-                              item.is_primary
-                                ? 'bg-primary text-white'
-                                : 'bg-white/20 hover:bg-primary text-white'
-                            } disabled:opacity-50`}
-                            title={item.is_primary ? 'Selected' : 'Use this'}
-                          >
-                            {isSelecting ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Check className="w-3 h-3" />
-                            )}
-                          </button>
-                          {/* 보기 버튼 */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setModalAsset(asset)
-                            }}
-                            className="p-1.5 bg-white/20 hover:bg-white/40 rounded transition-colors text-white"
-                            title="View"
-                          >
+                <>
+                  <div className="grid grid-cols-4 gap-2">
+                    {assets.slice(0, showCount).map((item) => {
+                      const asset = item.asset || item
+                      const hasPrimary = assets.some(a => a.is_primary)
+                      const isDimmed = hasPrimary && !item.is_primary
+                      const isSelecting = selectingAssetId === item.asset_id
+                      return (
+                        <div
+                          key={item.id}
+                          className={`relative aspect-video bg-dark-bg rounded overflow-hidden group transition-all ${
+                            item.is_primary ? 'ring-2 ring-primary' : ''
+                          } ${isDimmed ? 'opacity-40 hover:opacity-100' : ''}`}
+                        >
+                          <img
+                            src={asset.thumbnail_url}
+                            alt={asset.title || 'Thumbnail'}
+                            className="w-full h-full object-cover"
+                          />
+                          {/* 호버 시 버튼 오버레이 */}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                            {/* 선택 버튼 */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSelectAsset(item.asset_id)
+                              }}
+                              disabled={isSelecting || item.is_primary}
+                              className={`p-1.5 rounded transition-colors ${
+                                item.is_primary
+                                  ? 'bg-primary text-white'
+                                  : 'bg-white/20 hover:bg-primary text-white'
+                              } disabled:opacity-50`}
+                              title={item.is_primary ? 'Selected' : 'Use this'}
+                            >
+                              {isSelecting ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Check className="w-3 h-3" />
+                              )}
+                            </button>
+                            {/* 보기 버튼 */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setModalAsset(asset)
+                              }}
+                              className="p-1.5 bg-white/20 hover:bg-white/40 rounded transition-colors text-white"
+                              title="View"
+                            >
+                              {asset.asset_type === 'VIDEO' ? (
+                                <Play className="w-3 h-3" />
+                              ) : (
+                                <Eye className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                          {/* 타입 배지 */}
+                          <span className={`absolute top-0.5 right-0.5 p-0.5 rounded ${
+                            asset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
+                          }`}>
                             {asset.asset_type === 'VIDEO' ? (
-                              <Play className="w-3 h-3" />
+                              <Video className="w-2.5 h-2.5 text-white" />
                             ) : (
-                              <Eye className="w-3 h-3" />
+                              <Image className="w-2.5 h-2.5 text-white" />
                             )}
-                          </button>
+                          </span>
                         </div>
-                        {/* 타입 배지 */}
-                        <span className={`absolute top-0.5 right-0.5 p-0.5 rounded ${
-                          asset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
-                        }`}>
-                          {asset.asset_type === 'VIDEO' ? (
-                            <Video className="w-2.5 h-2.5 text-white" />
-                          ) : (
-                            <Image className="w-2.5 h-2.5 text-white" />
-                          )}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                  {/* 더보기 버튼 */}
+                  {assets.length > showCount && (
+                    <button
+                      onClick={() => setShowCount(prev => prev + 4)}
+                      className="w-full mt-2 py-1.5 text-xs text-gray-400 hover:text-white bg-dark-hover hover:bg-dark-border rounded transition-colors"
+                    >
+                      More ({assets.length - showCount} left)
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="text-xs text-gray-500">
                   No visuals yet. Click search to find.
