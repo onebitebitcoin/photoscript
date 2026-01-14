@@ -119,9 +119,10 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
     try {
       const { data: newAssets } = await blockApi.search(block.id, searchKeyword.trim(), { video_priority: true })
       if (newAssets.length > 0) {
-        // 기존 에셋에 새 에셋 추가
-        setAssets(prev => [...prev, ...newAssets])
-        toast.success(`${newAssets.length}개 에셋 추가됨`)
+        // 새 에셋으로 교체
+        setAssets(newAssets)
+        setShowCount(4)
+        toast.success(`${newAssets.length}개 에셋 찾음`)
       } else {
         toast.error('검색 결과가 없습니다')
       }
