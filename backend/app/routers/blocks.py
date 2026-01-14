@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
 from app.config import get_settings
@@ -309,3 +309,109 @@ async def match_single_block(
     logger.info(f"단일 블록 매칭 완료: block_id={block_id}, assets_count={len(assets_data)}")
 
     return block
+
+
+@router.post("/{block_id}/search", response_model=List[BlockAssetResponse])
+async def search_assets_by_keyword(
+    block_id: str,
+    request: BlockSearchRequest,
+    db: Session = Depends(get_db)
+):
+    """사용자 지정 키워드로 추가 에셋 검색"""
+    logger.info(f"키워드 검색: block_id={block_id}, keyword={request.keyword}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    # Pexels 클라이언트 초기화
+    pexels_client = PexelsClient()
+    settings = get_settings()
+
+    try:
+        assets_data = await match_assets_for_block(
+            block.text,
+            [request.keyword],  # 단일 키워드로 검색
+            pexels_client,
+            max_candidates=settings.max_candidates_per_block,
+            video_priority=request.video_priority
+        )
+    except Exception as e:
+        logger.error(f"키워드 검색 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"검색 중 오류가 발생했습니다: {str(e)}"}
+        )
+
+    # 에셋 저장 및 블록에 연결
+    new_block_assets = []
+    for asset_data in assets_data:
+        # 기존에 같은 URL의 에셋이 있는지 확인
+        existing_asset = db.query(Asset).filter(
+            Asset.source_url == asset_data["source_url"]
+        ).first()
+
+        if existing_asset:
+            asset = existing_asset
+        else:
+            asset = Asset(
+                provider=asset_data["provider"],
+                asset_type=asset_data["asset_type"],
+                source_url=asset_data["source_url"],
+                thumbnail_url=asset_data["thumbnail_url"],
+                title=asset_data.get("title"),
+                license=asset_data.get("license"),
+                meta=asset_data.get("meta")
+            )
+            db.add(asset)
+            db.commit()
+            db.refresh(asset)
+
+        # 이미 블록에 연결된 에셋인지 확인
+        existing_link = db.query(BlockAsset).filter(
+            BlockAsset.block_id == block_id,
+            BlockAsset.asset_id == asset.id
+        ).first()
+
+        if not existing_link:
+            block_asset = BlockAsset(
+                block_id=block.id,
+                asset_id=asset.id,
+                score=asset_data.get("score", 0.0),
+                is_primary=False,
+                chosen_by=ChosenBy.AUTO
+            )
+            db.add(block_asset)
+            db.commit()
+            db.refresh(block_asset)
+
+            new_block_assets.append(BlockAssetResponse(
+                id=block_asset.id,
+                block_id=block_asset.block_id,
+                asset_id=block_asset.asset_id,
+                score=block_asset.score,
+                is_primary=block_asset.is_primary,
+                chosen_by=block_asset.chosen_by,
+                asset={
+                    "id": asset.id,
+                    "provider": asset.provider,
+                    "asset_type": asset.asset_type,
+                    "source_url": asset.source_url,
+                    "thumbnail_url": asset.thumbnail_url,
+                    "title": asset.title,
+                    "license": asset.license,
+                    "meta": asset.meta,
+                    "created_at": asset.created_at
+                },
+                created_at=block_asset.created_at,
+                updated_at=block_asset.updated_at
+            ))
+
+    # 블록 상태 업데이트
+    if new_block_assets:
+        block.status = BlockStatus.MATCHED
+        db.commit()
+
+    logger.info(f"키워드 검색 완료: {len(new_block_assets)}개 새 에셋 추가")
+
+    return new_block_assets

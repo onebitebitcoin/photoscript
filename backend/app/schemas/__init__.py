@@ -15,7 +15,8 @@ from app.schemas.block import (
     SetPrimaryRequest,
     BlockUpdate,
     BlockSplitRequest,
-    BlockMergeRequest
+    BlockMergeRequest,
+    BlockSearchRequest
 )
 from app.schemas.asset import (
     AssetResponse,
@@ -38,6 +39,7 @@ __all__ = [
     "BlockUpdate",
     "BlockSplitRequest",
     "BlockMergeRequest",
+    "BlockSearchRequest",
     "AssetResponse",
     "BlockAssetResponse"
 ]

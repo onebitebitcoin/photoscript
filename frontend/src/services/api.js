@@ -125,6 +125,14 @@ export const blockApi = {
    * @param {Object} options - { video_priority?, max_candidates_per_block? }
    */
   match: (blockId, options = {}) => api.post(`/blocks/${blockId}/match`, options),
+
+  /**
+   * 키워드로 추가 에셋 검색
+   * @param {string} blockId - 블록 ID
+   * @param {string} keyword - 검색 키워드
+   * @param {Object} options - { video_priority? }
+   */
+  search: (blockId, keyword, options = {}) => api.post(`/blocks/${blockId}/search`, { keyword, ...options }),
 }
 
 export default api

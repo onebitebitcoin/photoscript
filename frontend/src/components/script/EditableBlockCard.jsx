@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play } from 'lucide-react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
+import toast from 'react-hot-toast'
 
 /**
  * 편집 가능한 블록 카드 컴포넌트
@@ -21,6 +22,9 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
   const [isLoadingAssets, setIsLoadingAssets] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [modalAsset, setModalAsset] = useState(null) // 모달에 표시할 에셋
+  const [searchKeyword, setSearchKeyword] = useState('') // 키워드 검색용
+  const [isKeywordSearching, setIsKeywordSearching] = useState(false)
+  const [selectingAssetId, setSelectingAssetId] = useState(null) // 선택 중인 에셋
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -80,6 +84,52 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
       alert(err.response?.data?.detail?.message || '에셋 검색에 실패했습니다.')
     } finally {
       setIsSearching(false)
+    }
+  }
+
+  // 에셋 선택 (primary 설정)
+  const handleSelectAsset = async (assetId) => {
+    setSelectingAssetId(assetId)
+    try {
+      await blockApi.setPrimary(block.id, assetId)
+      // 로컬 상태 업데이트
+      setAssets(prev => prev.map(a => ({
+        ...a,
+        is_primary: a.asset_id === assetId
+      })))
+      toast.success('Selected')
+      if (onBlockChange) onBlockChange()
+    } catch (err) {
+      console.error('Failed to select asset:', err)
+      toast.error('Failed to select')
+    } finally {
+      setSelectingAssetId(null)
+    }
+  }
+
+  // 키워드로 추가 에셋 검색
+  const handleKeywordSearch = async () => {
+    if (!searchKeyword.trim()) {
+      toast.error('키워드를 입력해주세요')
+      return
+    }
+
+    setIsKeywordSearching(true)
+    try {
+      const { data: newAssets } = await blockApi.search(block.id, searchKeyword.trim(), { video_priority: true })
+      if (newAssets.length > 0) {
+        // 기존 에셋에 새 에셋 추가 (최대 8개까지)
+        setAssets(prev => [...prev, ...newAssets].slice(0, 8))
+        toast.success(`${newAssets.length}개 에셋 추가됨`)
+      } else {
+        toast.error('검색 결과가 없습니다')
+      }
+      setSearchKeyword('')
+    } catch (err) {
+      console.error('Failed to search:', err)
+      toast.error(err.response?.data?.detail?.message || '검색에 실패했습니다')
+    } finally {
+      setIsKeywordSearching(false)
     }
   }
 
@@ -192,25 +242,58 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                     const asset = item.asset || item
                     const hasPrimary = assets.some(a => a.is_primary)
                     const isDimmed = hasPrimary && !item.is_primary
+                    const isSelecting = selectingAssetId === item.asset_id
                     return (
                       <div
                         key={item.id}
-                        onClick={() => setModalAsset(asset)}
-                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden cursor-pointer group transition-all ${
+                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden group transition-all ${
                           item.is_primary ? 'ring-2 ring-primary' : ''
-                        } ${isDimmed ? 'opacity-40' : ''}`}
+                        } ${isDimmed ? 'opacity-40 hover:opacity-100' : ''}`}
                       >
                         <img
                           src={asset.thumbnail_url}
                           alt={asset.title || 'Thumbnail'}
                           className="w-full h-full object-cover"
                         />
-                        {/* 영상인 경우 재생 아이콘 오버레이 */}
-                        {asset.asset_type === 'VIDEO' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Play className="w-6 h-6 text-white" />
-                          </div>
-                        )}
+                        {/* 호버 시 버튼 오버레이 */}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                          {/* 선택 버튼 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleSelectAsset(item.asset_id)
+                            }}
+                            disabled={isSelecting || item.is_primary}
+                            className={`p-1.5 rounded transition-colors ${
+                              item.is_primary
+                                ? 'bg-primary text-white'
+                                : 'bg-white/20 hover:bg-primary text-white'
+                            } disabled:opacity-50`}
+                            title={item.is_primary ? 'Selected' : 'Use this'}
+                          >
+                            {isSelecting ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Check className="w-3 h-3" />
+                            )}
+                          </button>
+                          {/* 보기 버튼 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setModalAsset(asset)
+                            }}
+                            className="p-1.5 bg-white/20 hover:bg-white/40 rounded transition-colors text-white"
+                            title="View"
+                          >
+                            {asset.asset_type === 'VIDEO' ? (
+                              <Play className="w-3 h-3" />
+                            ) : (
+                              <Eye className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                        {/* 타입 배지 */}
                         <span className={`absolute top-0.5 right-0.5 p-0.5 rounded ${
                           asset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
                         }`}>
@@ -229,6 +312,29 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                   No visuals yet. Click search to find.
                 </p>
               )}
+
+              {/* 키워드 검색 */}
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleKeywordSearch()}
+                  placeholder="Search more..."
+                  className="flex-1 bg-dark-bg border border-dark-border rounded px-2 py-1 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+                />
+                <button
+                  onClick={handleKeywordSearch}
+                  disabled={isKeywordSearching}
+                  className="px-2 py-1 bg-dark-hover hover:bg-primary/20 rounded text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {isKeywordSearching ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Search className="w-3 h-3" />
+                  )}
+                </button>
+              </div>
             </div>
           )}
 
