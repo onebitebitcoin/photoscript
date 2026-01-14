@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video } from 'lucide-react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 
@@ -20,6 +20,7 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
   const [assets, setAssets] = useState([])
   const [isLoadingAssets, setIsLoadingAssets] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  const [modalAsset, setModalAsset] = useState(null) // 모달에 표시할 에셋
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -192,7 +193,8 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                     return (
                       <div
                         key={item.id}
-                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden ${
+                        onClick={() => setModalAsset(asset)}
+                        className={`relative aspect-video bg-dark-bg rounded overflow-hidden cursor-pointer group ${
                           item.is_primary ? 'ring-2 ring-primary' : ''
                         }`}
                       >
@@ -201,6 +203,12 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
                           alt={asset.title || 'Thumbnail'}
                           className="w-full h-full object-cover"
                         />
+                        {/* 영상인 경우 재생 아이콘 오버레이 */}
+                        {asset.asset_type === 'VIDEO' && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Play className="w-6 h-6 text-white" />
+                          </div>
+                        )}
                         <span className={`absolute top-0.5 right-0.5 p-0.5 rounded ${
                           asset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
                         }`}>
@@ -242,6 +250,73 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 미디어 모달 */}
+      {modalAsset && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setModalAsset(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 닫기 버튼 */}
+            <button
+              onClick={() => setModalAsset(null)}
+              className="absolute -top-10 right-0 p-2 text-white hover:text-gray-300 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* 미디어 콘텐츠 */}
+            <div className="bg-dark-card rounded-lg overflow-hidden">
+              {modalAsset.asset_type === 'VIDEO' ? (
+                <video
+                  src={modalAsset.source_url}
+                  poster={modalAsset.thumbnail_url}
+                  controls
+                  autoPlay
+                  className="w-full max-h-[70vh] object-contain"
+                />
+              ) : (
+                <img
+                  src={modalAsset.source_url}
+                  alt={modalAsset.title || 'Image'}
+                  className="w-full max-h-[70vh] object-contain"
+                />
+              )}
+
+              {/* 정보 */}
+              <div className="p-3 border-t border-dark-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      modalAsset.asset_type === 'VIDEO' ? 'bg-blue-500' : 'bg-green-500'
+                    } text-white`}>
+                      {modalAsset.asset_type}
+                    </span>
+                    <span className="text-xs text-gray-400 ml-2 capitalize">
+                      {modalAsset.provider}
+                    </span>
+                  </div>
+                  <a
+                    href={modalAsset.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Open original
+                  </a>
+                </div>
+                {modalAsset.title && (
+                  <p className="text-sm text-white mt-2">{modalAsset.title}</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
