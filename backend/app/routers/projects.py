@@ -17,7 +17,8 @@ from app.schemas import (
     SplitResponse,
     MatchOptions,
     MatchResponse,
-    BlockMergeRequest
+    BlockMergeRequest,
+    BlockCreate
 )
 from app.schemas.project import BlockSummary, AssetSummary
 from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block
@@ -506,3 +507,44 @@ async def merge_blocks(
     logger.info(f"블록 합치기 완료: {len(request.block_ids)}개 → 1개")
 
     return first_block
+
+
+@router.post("/{project_id}/blocks", response_model=BlockResponse)
+async def create_block(
+    project_id: str,
+    request: BlockCreate,
+    db: Session = Depends(get_db)
+):
+    """새 블록 추가"""
+    logger.info(f"블록 추가: project_id={project_id}, insert_at={request.insert_at}")
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 기존 블록들의 인덱스 조정 (insert_at 이상인 블록들 +1)
+    existing_blocks = db.query(Block).filter(
+        Block.project_id == project_id,
+        Block.index >= request.insert_at
+    ).order_by(Block.index.desc()).all()
+
+    for block in existing_blocks:
+        block.index += 1
+
+    db.commit()
+
+    # 새 블록 생성
+    new_block = Block(
+        project_id=project_id,
+        index=request.insert_at,
+        text=request.text,
+        keywords=request.keywords or [],
+        status=BlockStatus.DRAFT
+    )
+    db.add(new_block)
+    db.commit()
+    db.refresh(new_block)
+
+    logger.info(f"블록 추가 완료: block_id={new_block.id}, index={new_block.index}")
+
+    return new_block

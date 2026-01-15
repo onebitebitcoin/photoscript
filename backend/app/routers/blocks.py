@@ -6,7 +6,8 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest
+from app.services import extract_keywords, KeywordExtractionError
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
 from app.config import get_settings
@@ -415,3 +416,50 @@ async def search_assets_by_keyword(
     logger.info(f"키워드 검색 완료: {len(new_block_assets)}개 새 에셋 추가")
 
     return new_block_assets
+
+
+@router.post("/{block_id}/extract-keywords", response_model=BlockResponse)
+async def extract_block_keywords(
+    block_id: str,
+    request: KeywordExtractRequest = None,
+    db: Session = Depends(get_db)
+):
+    """블록 텍스트에서 키워드 자동 추출 (LLM)"""
+    logger.info(f"키워드 추출 요청: block_id={block_id}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    if not block.text or not block.text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "블록 텍스트가 비어있습니다. 먼저 텍스트를 입력해주세요."}
+        )
+
+    # 옵션 설정
+    if request is None:
+        request = KeywordExtractRequest()
+
+    try:
+        keywords = await extract_keywords(block.text, max_keywords=request.max_keywords)
+    except KeywordExtractionError as e:
+        logger.error(f"키워드 추출 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"키워드 추출 실패: {str(e)}"}
+        )
+
+    # 블록 키워드 업데이트
+    block.keywords = keywords
+    block.status = BlockStatus.DRAFT
+
+    # 기존 에셋 연결 삭제 (재매칭 필요)
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+
+    db.commit()
+    db.refresh(block)
+
+    logger.info(f"키워드 추출 완료: block_id={block_id}, keywords={keywords}")
+
+    return block

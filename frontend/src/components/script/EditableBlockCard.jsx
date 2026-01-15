@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye } from 'lucide-react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2 } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 import toast from 'react-hot-toast'
@@ -8,11 +8,13 @@ import toast from 'react-hot-toast'
  * 편집 가능한 블록 카드 컴포넌트
  * @param {Object} block - 블록 데이터
  * @param {boolean} isSelected - 선택 여부
+ * @param {boolean} isNew - 새로 추가된 블록 여부 (자동 편집 모드)
  * @param {function} onSelect - 선택 토글 콜백
  * @param {function} onUpdate - 블록 업데이트 콜백
  * @param {function} onBlockChange - 블록 변경 시 부모에 알림 (매칭 완료 등)
+ * @param {function} onNewBlockProcessed - 새 블록 처리 완료 시 콜백
  */
-function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChange }) {
+function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlockChange, onNewBlockProcessed }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const [text, setText] = useState(block.text)
@@ -26,6 +28,15 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
   const [isKeywordSearching, setIsKeywordSearching] = useState(false)
   const [selectingAssetId, setSelectingAssetId] = useState(null) // 선택 중인 에셋
   const [showCount, setShowCount] = useState(4) // 표시할 에셋 개수
+  const [isExtractingKeywords, setIsExtractingKeywords] = useState(false) // 키워드 추출 중
+
+  // 새 블록인 경우 자동으로 편집 모드 진입
+  useEffect(() => {
+    if (isNew) {
+      setIsEditing(true)
+      onNewBlockProcessed?.()
+    }
+  }, [isNew, onNewBlockProcessed])
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -135,6 +146,30 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
     }
   }
 
+  // 텍스트에서 키워드 자동 추출 (LLM)
+  const handleExtractKeywords = async () => {
+    if (!text.trim()) {
+      toast.error('텍스트를 먼저 입력해주세요')
+      return
+    }
+
+    setIsExtractingKeywords(true)
+    try {
+      // 먼저 텍스트를 저장
+      await onUpdate(block.id, { text })
+
+      // 키워드 추출
+      const { data: updatedBlock } = await blockApi.extractKeywords(block.id)
+      setKeywords(updatedBlock.keywords || [])
+      toast.success(`${updatedBlock.keywords?.length || 0}개 키워드 추출됨`)
+    } catch (err) {
+      console.error('Failed to extract keywords:', err)
+      toast.error(err.response?.data?.detail?.message || '키워드 추출에 실패했습니다')
+    } finally {
+      setIsExtractingKeywords(false)
+    }
+  }
+
   return (
     <div
       className={`
@@ -220,7 +255,24 @@ function EditableBlockCard({ block, isSelected, onSelect, onUpdate, onBlockChang
 
           {/* 키워드 */}
           <div>
-            <p className="text-xs text-gray-500 mb-1.5">Keywords</p>
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs text-gray-500">Keywords</p>
+              {isEditing && (
+                <button
+                  onClick={handleExtractKeywords}
+                  disabled={isExtractingKeywords || !text.trim()}
+                  className="flex items-center gap-1 px-2 py-0.5 text-xs text-primary hover:text-primary-hover disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                  title="텍스트에서 키워드 자동 추출"
+                >
+                  {isExtractingKeywords ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Wand2 className="w-3 h-3" />
+                  )}
+                  <span>Auto</span>
+                </button>
+              )}
+            </div>
             <KeywordEditor
               keywords={isEditing ? keywords : (block.keywords || [])}
               onChange={setKeywords}

@@ -86,6 +86,13 @@ export const projectApi = {
    * @param {string} id - 프로젝트 ID
    */
   getBlocks: (id) => api.get(`/projects/${id}/blocks`),
+
+  /**
+   * 새 블록 생성
+   * @param {string} id - 프로젝트 ID
+   * @param {Object} data - { text?, keywords?, insert_at }
+   */
+  createBlock: (id, data) => api.post(`/projects/${id}/blocks`, data),
 }
 
 /**
@@ -133,6 +140,13 @@ export const blockApi = {
    * @param {Object} options - { video_priority? }
    */
   search: (blockId, keyword, options = {}) => api.post(`/blocks/${blockId}/search`, { keyword, ...options }),
+
+  /**
+   * 블록 텍스트에서 키워드 자동 추출 (LLM)
+   * @param {string} blockId - 블록 ID
+   * @param {Object} options - { max_keywords? }
+   */
+  extractKeywords: (blockId, options = {}) => api.post(`/blocks/${blockId}/extract-keywords`, options),
 }
 
 export default api

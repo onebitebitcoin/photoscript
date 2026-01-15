@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Merge, Sparkles, Loader2, AlertCircle } from 'lucide-react'
 import { projectApi, blockApi } from '../services/api'
 import EditableBlockCard from '../components/script/EditableBlockCard'
+import AddBlockButton from '../components/script/AddBlockButton'
 import Button from '../components/common/Button'
 import logger from '../utils/logger'
 import toast from 'react-hot-toast'
@@ -21,6 +22,8 @@ function EditBlocksPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isMatching, setIsMatching] = useState(false)
   const [isMerging, setIsMerging] = useState(false)
+  const [isAddingBlock, setIsAddingBlock] = useState(false)
+  const [newBlockId, setNewBlockId] = useState(null) // 새로 추가된 블록 ID (자동 편집 모드용)
   const [error, setError] = useState(null)
 
   // 프로젝트 및 블록 로드
@@ -132,6 +135,36 @@ function EditBlocksPage() {
     }
   }
 
+  // 새 블록 추가
+  const handleAddBlock = async (insertAt) => {
+    try {
+      setIsAddingBlock(true)
+      setError(null)
+
+      const { data: newBlock } = await projectApi.createBlock(projectId, {
+        text: '',
+        keywords: [],
+        insert_at: insertAt
+      })
+
+      // 블록 목록 새로고침
+      await loadProject()
+
+      // 새 블록 ID 저장 (자동 편집 모드)
+      setNewBlockId(newBlock.id)
+
+      logger.info('Block added', { blockId: newBlock.id, insertAt })
+      toast.success('새 블록이 추가되었습니다')
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      setError(message)
+      logger.error('Failed to add block', { error: message })
+      toast.error('블록 추가 실패')
+    } finally {
+      setIsAddingBlock(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -211,15 +244,29 @@ function EditBlocksPage() {
       {/* 블록 목록 */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3 max-w-3xl mx-auto">
-          {blocks.map((block) => (
-            <EditableBlockCard
-              key={block.id}
-              block={block}
-              isSelected={selectedIds.includes(block.id)}
-              onSelect={handleSelect}
-              onUpdate={handleUpdateBlock}
-              onBlockChange={handleBlockChange}
-            />
+          {/* 첫 번째 블록 위에 추가 버튼 */}
+          <AddBlockButton
+            onAdd={() => handleAddBlock(0)}
+            isLoading={isAddingBlock}
+          />
+
+          {blocks.map((block, idx) => (
+            <Fragment key={block.id}>
+              <EditableBlockCard
+                block={block}
+                isSelected={selectedIds.includes(block.id)}
+                isNew={newBlockId === block.id}
+                onSelect={handleSelect}
+                onUpdate={handleUpdateBlock}
+                onBlockChange={handleBlockChange}
+                onNewBlockProcessed={() => setNewBlockId(null)}
+              />
+              {/* 각 블록 아래에 추가 버튼 */}
+              <AddBlockButton
+                onAdd={() => handleAddBlock(idx + 1)}
+                isLoading={isAddingBlock}
+              />
+            </Fragment>
           ))}
         </div>
       </div>

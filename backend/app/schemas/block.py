@@ -72,3 +72,15 @@ class BlockSearchRequest(BaseModel):
     """키워드 검색 요청"""
     keyword: str = Field(..., min_length=1, max_length=100, description="검색할 키워드")
     video_priority: Optional[bool] = Field(True, description="영상 우선 검색 여부")
+
+
+class BlockCreate(BaseModel):
+    """새 블록 생성 요청"""
+    text: str = Field(default="", description="블록 텍스트")
+    keywords: Optional[List[str]] = Field(default=[], description="키워드 목록")
+    insert_at: int = Field(..., ge=0, description="삽입할 인덱스 위치")
+
+
+class KeywordExtractRequest(BaseModel):
+    """키워드 추출 요청"""
+    max_keywords: int = Field(default=5, ge=1, le=10, description="추출할 최대 키워드 수")
