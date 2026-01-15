@@ -165,6 +165,29 @@ function EditBlocksPage() {
     }
   }
 
+  // 블록 삭제
+  const handleDeleteBlock = async (blockId) => {
+    try {
+      setError(null)
+
+      await blockApi.delete(blockId)
+
+      // 선택 목록에서 제거
+      setSelectedIds(prev => prev.filter(id => id !== blockId))
+
+      // 블록 목록 새로고침
+      await loadProject()
+
+      logger.info('Block deleted', { blockId })
+      toast.success('블록이 삭제되었습니다')
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      setError(message)
+      logger.error('Failed to delete block', { error: message })
+      toast.error('블록 삭제 실패')
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -260,6 +283,7 @@ function EditBlocksPage() {
                 onUpdate={handleUpdateBlock}
                 onBlockChange={handleBlockChange}
                 onNewBlockProcessed={() => setNewBlockId(null)}
+                onDelete={handleDeleteBlock}
               />
               {/* 각 블록 아래에 추가 버튼 */}
               <AddBlockButton

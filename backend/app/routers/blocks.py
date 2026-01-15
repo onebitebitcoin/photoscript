@@ -463,3 +463,41 @@ async def extract_block_keywords(
     logger.info(f"키워드 추출 완료: block_id={block_id}, keywords={keywords}")
 
     return block
+
+
+@router.delete("/{block_id}")
+async def delete_block(
+    block_id: str,
+    db: Session = Depends(get_db)
+):
+    """블록 삭제"""
+    logger.info(f"블록 삭제 요청: block_id={block_id}")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    project_id = block.project_id
+    deleted_index = block.index
+
+    # 블록-에셋 연결 삭제
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+
+    # 블록 삭제
+    db.delete(block)
+    db.commit()
+
+    # 후속 블록들 인덱스 재정렬
+    subsequent_blocks = db.query(Block).filter(
+        Block.project_id == project_id,
+        Block.index > deleted_index
+    ).order_by(Block.index).all()
+
+    for b in subsequent_blocks:
+        b.index -= 1
+
+    db.commit()
+
+    logger.info(f"블록 삭제 완료: block_id={block_id}")
+
+    return {"message": "블록이 삭제되었습니다"}

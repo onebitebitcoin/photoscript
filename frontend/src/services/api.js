@@ -147,6 +147,12 @@ export const blockApi = {
    * @param {Object} options - { max_keywords? }
    */
   extractKeywords: (blockId, options = {}) => api.post(`/blocks/${blockId}/extract-keywords`, options),
+
+  /**
+   * 블록 삭제
+   * @param {string} blockId - 블록 ID
+   */
+  delete: (blockId) => api.delete(`/blocks/${blockId}`),
 }
 
 export default api

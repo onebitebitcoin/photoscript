@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2 } from 'lucide-react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2, Trash2 } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 import toast from 'react-hot-toast'
@@ -13,8 +13,9 @@ import toast from 'react-hot-toast'
  * @param {function} onUpdate - 블록 업데이트 콜백
  * @param {function} onBlockChange - 블록 변경 시 부모에 알림 (매칭 완료 등)
  * @param {function} onNewBlockProcessed - 새 블록 처리 완료 시 콜백
+ * @param {function} onDelete - 블록 삭제 콜백
  */
-function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlockChange, onNewBlockProcessed }) {
+function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlockChange, onNewBlockProcessed, onDelete }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const [text, setText] = useState(block.text)
@@ -221,6 +222,13 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
                 ) : (
                   <Search className="w-4 h-4 text-gray-400" />
                 )}
+              </button>
+              <button
+                onClick={() => onDelete?.(block.id)}
+                className="p-1.5 hover:bg-red-500/20 rounded transition-colors"
+                title="Delete block"
+              >
+                <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-400" />
               </button>
             </>
           )}
