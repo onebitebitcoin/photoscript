@@ -153,6 +153,13 @@ export const blockApi = {
    * @param {string} blockId - 블록 ID
    */
   delete: (blockId) => api.delete(`/blocks/${blockId}`),
+
+  /**
+   * AI로 블록 텍스트 자동 생성
+   * @param {string} blockId - 블록 ID
+   * @param {string} prompt - 프롬프트 (URL 또는 지시문)
+   */
+  generateText: (blockId, prompt) => api.post(`/blocks/${blockId}/generate-text`, { prompt }),
 }
 
 export default api

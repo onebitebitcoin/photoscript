@@ -6,8 +6,8 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest
-from app.services import extract_keywords, KeywordExtractionError
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest, GenerateTextRequest
+from app.services import extract_keywords, KeywordExtractionError, generate_block_text, TextGenerationError
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
 from app.config import get_settings
@@ -501,3 +501,40 @@ async def delete_block(
     logger.info(f"블록 삭제 완료: block_id={block_id}")
 
     return {"message": "블록이 삭제되었습니다"}
+
+
+@router.post("/{block_id}/generate-text", response_model=BlockResponse)
+async def generate_text_for_block(
+    block_id: str,
+    request: GenerateTextRequest,
+    db: Session = Depends(get_db)
+):
+    """AI로 블록 텍스트 자동 생성"""
+    logger.info(f"텍스트 생성 요청: block_id={block_id}, prompt={request.prompt[:50]}...")
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
+
+    try:
+        generated_text = await generate_block_text(request.prompt, block.text)
+    except TextGenerationError as e:
+        logger.error(f"텍스트 생성 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"텍스트 생성 실패: {str(e)}"}
+        )
+
+    # 블록 텍스트 업데이트
+    block.text = generated_text
+    block.status = BlockStatus.DRAFT
+
+    # 기존 에셋 연결 삭제 (재매칭 필요)
+    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+
+    db.commit()
+    db.refresh(block)
+
+    logger.info(f"텍스트 생성 완료: block_id={block_id}, text_length={len(generated_text)}")
+
+    return block

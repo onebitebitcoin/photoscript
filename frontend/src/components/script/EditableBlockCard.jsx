@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2, Trash2 } from 'lucide-react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2, Trash2, Sparkles } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 import toast from 'react-hot-toast'
@@ -30,6 +30,8 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
   const [selectingAssetId, setSelectingAssetId] = useState(null) // 선택 중인 에셋
   const [showCount, setShowCount] = useState(4) // 표시할 에셋 개수
   const [isExtractingKeywords, setIsExtractingKeywords] = useState(false) // 키워드 추출 중
+  const [aiPrompt, setAiPrompt] = useState('') // AI 프롬프트 입력
+  const [isGeneratingText, setIsGeneratingText] = useState(false) // 텍스트 생성 중
 
   // 새 블록인 경우 자동으로 편집 모드 진입
   useEffect(() => {
@@ -171,6 +173,27 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
     }
   }
 
+  // AI로 텍스트 자동 생성
+  const handleGenerateText = async () => {
+    if (!aiPrompt.trim()) {
+      toast.error('URL이나 지시문을 입력해주세요')
+      return
+    }
+
+    setIsGeneratingText(true)
+    try {
+      const { data: updatedBlock } = await blockApi.generateText(block.id, aiPrompt.trim())
+      setText(updatedBlock.text)
+      setAiPrompt('')
+      toast.success('텍스트가 생성되었습니다')
+    } catch (err) {
+      console.error('Failed to generate text:', err)
+      toast.error(err.response?.data?.detail?.message || '텍스트 생성에 실패했습니다')
+    } finally {
+      setIsGeneratingText(false)
+    }
+  }
+
   return (
     <div
       className={`
@@ -247,6 +270,33 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
       {/* 본문 */}
       {isExpanded && (
         <div className="p-3 space-y-3">
+          {/* AI 텍스트 생성 (편집 모드에서만) */}
+          {isEditing && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleGenerateText()}
+                placeholder="URL이나 지시문 입력 후 AI 버튼..."
+                className="flex-1 bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
+              />
+              <button
+                onClick={handleGenerateText}
+                disabled={isGeneratingText || !aiPrompt.trim()}
+                className="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 rounded text-xs text-primary hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                title="AI로 텍스트 생성"
+              >
+                {isGeneratingText ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                <span>AI</span>
+              </button>
+            </div>
+          )}
+
           {/* 텍스트 */}
           {isEditing ? (
             <textarea

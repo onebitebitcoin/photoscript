@@ -84,3 +84,8 @@ class BlockCreate(BaseModel):
 class KeywordExtractRequest(BaseModel):
     """키워드 추출 요청"""
     max_keywords: int = Field(default=5, ge=1, le=10, description="추출할 최대 키워드 수")
+
+
+class GenerateTextRequest(BaseModel):
+    """AI 텍스트 생성 요청"""
+    prompt: str = Field(..., min_length=1, description="프롬프트 (URL 또는 지시문)")

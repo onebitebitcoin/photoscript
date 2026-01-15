@@ -3,6 +3,7 @@ from app.services.keyword_extractor import extract_keywords, KeywordExtractionEr
 from app.services.script_processor import process_script, ScriptProcessingError
 from app.services.pexels_client import PexelsClient
 from app.services.matcher import match_assets_for_block
+from app.services.text_generator import generate_block_text, TextGenerationError
 
 __all__ = [
     "split_script",
@@ -11,5 +12,7 @@ __all__ = [
     "process_script",
     "ScriptProcessingError",
     "PexelsClient",
-    "match_assets_for_block"
+    "match_assets_for_block",
+    "generate_block_text",
+    "TextGenerationError"
 ]
