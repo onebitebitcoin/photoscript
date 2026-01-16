@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 import httpx
 from app.config import get_settings
+from app.errors import PexelsAPIError
 from app.utils.logger import logger
 
 settings = get_settings()
@@ -12,9 +13,15 @@ class PexelsClient:
     BASE_URL = "https://api.pexels.com/v1"
     VIDEO_URL = "https://api.pexels.com/videos"
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, raise_on_error: bool = False):
+        """
+        Args:
+            api_key: Pexels API 키
+            raise_on_error: True면 API 오류 시 예외 발생, False면 빈 리스트 반환
+        """
         self.api_key = api_key or settings.pexels_api_key
         self.headers = {"Authorization": self.api_key}
+        self.raise_on_error = raise_on_error
 
     async def search_photos(self, query: str, per_page: int = 10) -> List[Dict[str, Any]]:
         """
@@ -26,9 +33,14 @@ class PexelsClient:
 
         Returns:
             파싱된 이미지 정보 리스트
+
+        Raises:
+            PexelsAPIError: raise_on_error=True이고 API 오류 발생 시
         """
         if not self.api_key:
             logger.warning("Pexels API 키가 설정되지 않음")
+            if self.raise_on_error:
+                raise PexelsAPIError("Pexels API 키가 설정되지 않았습니다")
             return []
 
         logger.info(f"Pexels 이미지 검색: '{query}', per_page={per_page}")
@@ -50,9 +62,13 @@ class PexelsClient:
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Pexels API HTTP 에러: {e.response.status_code}")
+            if self.raise_on_error:
+                raise PexelsAPIError(f"Pexels API HTTP 에러: {e.response.status_code}")
             return []
         except Exception as e:
             logger.error(f"Pexels 이미지 검색 실패: {e}")
+            if self.raise_on_error:
+                raise PexelsAPIError(f"Pexels 이미지 검색 실패: {str(e)}")
             return []
 
     async def search_videos(self, query: str, per_page: int = 5) -> List[Dict[str, Any]]:
@@ -65,9 +81,14 @@ class PexelsClient:
 
         Returns:
             파싱된 영상 정보 리스트
+
+        Raises:
+            PexelsAPIError: raise_on_error=True이고 API 오류 발생 시
         """
         if not self.api_key:
             logger.warning("Pexels API 키가 설정되지 않음")
+            if self.raise_on_error:
+                raise PexelsAPIError("Pexels API 키가 설정되지 않았습니다")
             return []
 
         logger.info(f"Pexels 영상 검색: '{query}', per_page={per_page}")
@@ -89,9 +110,13 @@ class PexelsClient:
 
         except httpx.HTTPStatusError as e:
             logger.error(f"Pexels API HTTP 에러: {e.response.status_code}")
+            if self.raise_on_error:
+                raise PexelsAPIError(f"Pexels API HTTP 에러: {e.response.status_code}")
             return []
         except Exception as e:
             logger.error(f"Pexels 영상 검색 실패: {e}")
+            if self.raise_on_error:
+                raise PexelsAPIError(f"Pexels 영상 검색 실패: {str(e)}")
             return []
 
     def _parse_photo(self, photo: Dict[str, Any]) -> Dict[str, Any]:

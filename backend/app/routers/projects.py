@@ -22,11 +22,48 @@ from app.schemas import (
 )
 from app.schemas.project import BlockSummary, AssetSummary
 from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block
+from app.services.asset_service import AssetService
+from app.services.block_service import BlockService
+from app.services.project_service import ProjectService
+from app.errors import BlockMergeError, ProjectNotFoundError
 from app.config import get_settings
 from app.utils.logger import logger
 
 router = APIRouter()
 settings = get_settings()
+asset_service = AssetService()
+block_service = BlockService()
+project_service = ProjectService()
+
+
+@router.get("", response_model=List[ProjectResponse])
+async def list_projects(
+    db: Session = Depends(get_db)
+):
+    """프로젝트 목록 조회 (최신순)"""
+    logger.info("프로젝트 목록 조회")
+
+    projects = project_service.get_projects(db)
+
+    logger.info(f"프로젝트 목록 조회 완료: {len(projects)}개")
+    return projects
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: str,
+    db: Session = Depends(get_db)
+):
+    """프로젝트 삭제"""
+    logger.info(f"프로젝트 삭제 요청: id={project_id}")
+
+    try:
+        project_service.delete_project(db, project_id)
+    except ProjectNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"message": e.message})
+
+    logger.info(f"프로젝트 삭제 완료: id={project_id}")
+    return {"message": "프로젝트가 삭제되었습니다"}
 
 
 @router.post("", response_model=ProjectResponse)
@@ -47,13 +84,11 @@ async def create_project(
             }
         )
 
-    project = Project(
+    project = project_service.create_project(
+        db,
         title=request.title,
         script_raw=request.script_raw
     )
-    db.add(project)
-    db.commit()
-    db.refresh(project)
 
     logger.info(f"프로젝트 생성 완료: id={project.id}")
     return project
@@ -190,40 +225,9 @@ async def generate_visuals(
             logger.error(f"에셋 매칭 실패: {e}")
             assets_data = []
 
-        # 에셋 저장
+        # 에셋 저장 (AssetService 사용)
         if assets_data:
-            for i, asset_data in enumerate(assets_data):
-                # 에셋 저장 (또는 기존 에셋 조회)
-                existing_asset = db.query(Asset).filter(
-                    Asset.source_url == asset_data["source_url"]
-                ).first()
-
-                if existing_asset:
-                    asset = existing_asset
-                else:
-                    asset = Asset(
-                        provider=asset_data["provider"],
-                        asset_type=asset_data["asset_type"],
-                        source_url=asset_data["source_url"],
-                        thumbnail_url=asset_data["thumbnail_url"],
-                        title=asset_data.get("title"),
-                        license=asset_data.get("license"),
-                        meta=asset_data.get("meta")
-                    )
-                    db.add(asset)
-                    db.commit()
-                    db.refresh(asset)
-
-                # 블록-에셋 연결
-                block_asset = BlockAsset(
-                    block_id=block.id,
-                    asset_id=asset.id,
-                    score=asset_data.get("score", 0.0),
-                    is_primary=(i == 0),  # 첫 번째가 대표
-                    chosen_by=ChosenBy.AUTO
-                )
-                db.add(block_asset)
-
+            asset_service.save_and_link_assets(db, block.id, assets_data, clear_existing=False)
             block.status = BlockStatus.MATCHED
         else:
             block.status = BlockStatus.NO_RESULT
@@ -366,13 +370,10 @@ async def match_assets(
     for block in blocks:
         logger.info(f"블록 {block.index+1}/{len(blocks)} 처리 중")
 
-        # 기존 블록-에셋 연결 삭제
-        db.query(BlockAsset).filter(BlockAsset.block_id == block.id).delete()
-        db.commit()
-
         # 키워드가 없으면 NO_RESULT
         if not block.keywords:
             logger.warning(f"블록 {block.index+1}: 키워드 없음")
+            asset_service.delete_block_assets(db, block.id)
             block.status = BlockStatus.NO_RESULT
             db.commit()
             continue
@@ -390,43 +391,13 @@ async def match_assets(
             logger.error(f"에셋 매칭 실패: {e}")
             assets_data = []
 
-        # 에셋 저장
+        # 에셋 저장 (AssetService 사용)
         if assets_data:
-            for i, asset_data in enumerate(assets_data):
-                # 에셋 저장 (또는 기존 에셋 조회)
-                existing_asset = db.query(Asset).filter(
-                    Asset.source_url == asset_data["source_url"]
-                ).first()
-
-                if existing_asset:
-                    asset = existing_asset
-                else:
-                    asset = Asset(
-                        provider=asset_data["provider"],
-                        asset_type=asset_data["asset_type"],
-                        source_url=asset_data["source_url"],
-                        thumbnail_url=asset_data["thumbnail_url"],
-                        title=asset_data.get("title"),
-                        license=asset_data.get("license"),
-                        meta=asset_data.get("meta")
-                    )
-                    db.add(asset)
-                    db.commit()
-                    db.refresh(asset)
-
-                # 블록-에셋 연결
-                block_asset = BlockAsset(
-                    block_id=block.id,
-                    asset_id=asset.id,
-                    score=asset_data.get("score", 0.0),
-                    is_primary=(i == 0),
-                    chosen_by=ChosenBy.AUTO
-                )
-                db.add(block_asset)
-
+            asset_service.save_and_link_assets(db, block.id, assets_data, clear_existing=True)
             block.status = BlockStatus.MATCHED
             matched_count += 1
         else:
+            asset_service.delete_block_assets(db, block.id)
             block.status = BlockStatus.NO_RESULT
 
         db.commit()
@@ -453,60 +424,13 @@ async def merge_blocks(
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
-    # 블록 조회
-    blocks = db.query(Block).filter(
-        Block.id.in_(request.block_ids),
-        Block.project_id == project_id
-    ).order_by(Block.index).all()
+    try:
+        merged_block = block_service.merge_blocks(db, project_id, request.block_ids)
+    except BlockMergeError as e:
+        raise HTTPException(status_code=400, detail={"message": e.message})
 
-    if len(blocks) != len(request.block_ids):
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "일부 블록을 찾을 수 없습니다"}
-        )
-
-    # 인접한 블록인지 확인
-    indices = [b.index for b in blocks]
-    for i in range(len(indices) - 1):
-        if indices[i+1] - indices[i] != 1:
-            raise HTTPException(
-                status_code=400,
-                detail={"message": "인접한 블록만 합칠 수 있습니다"}
-            )
-
-    # 첫 번째 블록에 텍스트 합치기
-    merged_text = "\n\n".join([b.text for b in blocks])
-    merged_keywords = []
-    for b in blocks:
-        if b.keywords:
-            for kw in b.keywords:
-                if kw not in merged_keywords:
-                    merged_keywords.append(kw)
-
-    first_block = blocks[0]
-    first_block.text = merged_text
-    first_block.keywords = merged_keywords[:10]  # 최대 10개
-    first_block.status = BlockStatus.DRAFT
-
-    # 나머지 블록 삭제
-    for block in blocks[1:]:
-        db.query(BlockAsset).filter(BlockAsset.block_id == block.id).delete()
-        db.delete(block)
-
-    # 인덱스 재정렬
-    remaining_blocks = db.query(Block).filter(
-        Block.project_id == project_id
-    ).order_by(Block.index).all()
-
-    for new_idx, block in enumerate(remaining_blocks):
-        block.index = new_idx
-
-    db.commit()
-    db.refresh(first_block)
-
-    logger.info(f"블록 합치기 완료: {len(request.block_ids)}개 → 1개")
-
-    return first_block
+    logger.info(f"블록 합치기 완료: {len(request.block_ids)}개 -> 1개")
+    return merged_block
 
 
 @router.post("/{project_id}/blocks", response_model=BlockResponse)
@@ -522,29 +446,13 @@ async def create_block(
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
-    # 기존 블록들의 인덱스 조정 (insert_at 이상인 블록들 +1)
-    existing_blocks = db.query(Block).filter(
-        Block.project_id == project_id,
-        Block.index >= request.insert_at
-    ).order_by(Block.index.desc()).all()
-
-    for block in existing_blocks:
-        block.index += 1
-
-    db.commit()
-
-    # 새 블록 생성
-    new_block = Block(
-        project_id=project_id,
-        index=request.insert_at,
+    new_block = block_service.create_block(
+        db,
+        project_id,
         text=request.text,
-        keywords=request.keywords or [],
-        status=BlockStatus.DRAFT
+        keywords=request.keywords,
+        insert_at=request.insert_at
     )
-    db.add(new_block)
-    db.commit()
-    db.refresh(new_block)
 
     logger.info(f"블록 추가 완료: block_id={new_block.id}, index={new_block.index}")
-
     return new_block

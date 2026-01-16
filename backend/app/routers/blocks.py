@@ -10,10 +10,15 @@ from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, Bl
 from app.services import extract_keywords, KeywordExtractionError, generate_block_text_auto, TextGenerationError
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
+from app.services.asset_service import AssetService
+from app.services.block_service import BlockService
+from app.errors import AssetNotFoundError, BlockNotFoundError, BlockSplitError
 from app.config import get_settings
 from app.utils.logger import logger
 
 router = APIRouter()
+asset_service = AssetService()
+block_service = BlockService()
 
 
 @router.get("/{block_id}/assets", response_model=List[BlockAssetResponse])
@@ -71,29 +76,16 @@ async def update_block(
     """블록 텍스트/키워드 수정"""
     logger.info(f"블록 수정: block_id={block_id}")
 
-    block = db.query(Block).filter(Block.id == block_id).first()
-    if not block:
-        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
-
-    # 텍스트 수정
-    if request.text is not None:
-        block.text = request.text
-
-    # 키워드 수정
-    if request.keywords is not None:
-        block.keywords = request.keywords
-
-    # 상태를 DRAFT로 변경 (재매칭 필요)
-    block.status = BlockStatus.DRAFT
-
-    # 기존 에셋 연결 삭제 (재매칭 필요하므로)
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
-
-    db.commit()
-    db.refresh(block)
+    try:
+        block = block_service.update_block(
+            db, block_id,
+            text=request.text,
+            keywords=request.keywords
+        )
+    except BlockNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"message": e.message})
 
     logger.info(f"블록 수정 완료: block_id={block_id}")
-
     return block
 
 
@@ -106,66 +98,17 @@ async def split_block(
     """블록을 두 개로 나누기"""
     logger.info(f"블록 나누기: block_id={block_id}, position={request.split_position}")
 
-    block = db.query(Block).filter(Block.id == block_id).first()
-    if not block:
-        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
-
-    text = block.text
-    position = request.split_position
-
-    # 위치 검증
-    if position <= 0 or position >= len(text):
-        raise HTTPException(
-            status_code=400,
-            detail={"message": f"유효하지 않은 위치입니다. 1 ~ {len(text)-1} 사이여야 합니다."}
+    try:
+        first_block, second_block = block_service.split_block(
+            db, block_id, request.split_position
         )
+    except BlockNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"message": e.message})
+    except BlockSplitError as e:
+        raise HTTPException(status_code=400, detail={"message": e.message})
 
-    # 텍스트 분할
-    first_text = text[:position].strip()
-    second_text = text[position:].strip()
-
-    if not first_text or not second_text:
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "분할 후 빈 블록이 생성됩니다. 다른 위치를 선택해주세요."}
-        )
-
-    # 기존 블록-에셋 연결 삭제
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
-
-    # 첫 번째 블록 업데이트
-    block.text = first_text
-    block.keywords = block.keywords[:3] if block.keywords else []  # 키워드 절반
-    block.status = BlockStatus.DRAFT
-
-    # 두 번째 블록 생성
-    new_block = Block(
-        project_id=block.project_id,
-        index=block.index + 1,
-        text=second_text,
-        keywords=block.keywords[3:] if block.keywords and len(block.keywords) > 3 else [],
-        status=BlockStatus.DRAFT
-    )
-    db.add(new_block)
-    db.commit()
-
-    # 후속 블록들 인덱스 업데이트
-    subsequent_blocks = db.query(Block).filter(
-        Block.project_id == block.project_id,
-        Block.index > block.index,
-        Block.id != new_block.id
-    ).order_by(Block.index).all()
-
-    for b in subsequent_blocks:
-        b.index += 1
-
-    db.commit()
-    db.refresh(block)
-    db.refresh(new_block)
-
-    logger.info(f"블록 나누기 완료: {block_id} → {block.id}, {new_block.id}")
-
-    return [block, new_block]
+    logger.info(f"블록 나누기 완료: {block_id} -> {first_block.id}, {second_block.id}")
+    return [first_block, second_block]
 
 
 @router.post("/{block_id}/primary", response_model=BlockResponse)
@@ -181,31 +124,14 @@ async def set_primary_asset(
     if not block:
         raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
 
-    # 해당 블록-에셋 연결 확인
-    target_ba = db.query(BlockAsset).filter(
-        BlockAsset.block_id == block_id,
-        BlockAsset.asset_id == request.asset_id
-    ).first()
-
-    if not target_ba:
-        raise HTTPException(
-            status_code=404,
-            detail={"message": "해당 에셋이 이 블록의 후보에 없습니다"}
-        )
-
-    # 기존 대표 해제
-    db.query(BlockAsset).filter(
-        BlockAsset.block_id == block_id,
-        BlockAsset.is_primary == True
-    ).update({"is_primary": False, "chosen_by": ChosenBy.AUTO})
-
-    # 새 대표 설정
-    target_ba.is_primary = True
-    target_ba.chosen_by = ChosenBy.USER
+    # AssetService로 대표 에셋 설정
+    try:
+        asset_service.set_primary_asset(db, block_id, request.asset_id)
+    except AssetNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"message": e.message})
 
     # 블록 상태 업데이트
     block.status = BlockStatus.CUSTOM
-
     db.commit()
     db.refresh(block)
 
@@ -242,10 +168,6 @@ async def match_single_block(
     max_candidates = options.max_candidates_per_block or settings.max_candidates_per_block
     video_priority = options.video_priority if options.video_priority is not None else True
 
-    # 기존 블록-에셋 연결 삭제
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
-    db.commit()
-
     # Pexels 클라이언트 초기화 및 에셋 매칭
     pexels_client = PexelsClient()
 
@@ -259,6 +181,7 @@ async def match_single_block(
         )
     except Exception as e:
         logger.error(f"에셋 매칭 실패: {e}")
+        asset_service.delete_block_assets(db, block_id)
         block.status = BlockStatus.NO_RESULT
         db.commit()
         raise HTTPException(
@@ -266,42 +189,12 @@ async def match_single_block(
             detail={"message": f"에셋 매칭 중 오류가 발생했습니다: {str(e)}"}
         )
 
-    # 에셋 저장
+    # 에셋 저장 (AssetService 사용)
     if assets_data:
-        for i, asset_data in enumerate(assets_data):
-            # 에셋 저장 (또는 기존 에셋 조회)
-            existing_asset = db.query(Asset).filter(
-                Asset.source_url == asset_data["source_url"]
-            ).first()
-
-            if existing_asset:
-                asset = existing_asset
-            else:
-                asset = Asset(
-                    provider=asset_data["provider"],
-                    asset_type=asset_data["asset_type"],
-                    source_url=asset_data["source_url"],
-                    thumbnail_url=asset_data["thumbnail_url"],
-                    title=asset_data.get("title"),
-                    license=asset_data.get("license"),
-                    meta=asset_data.get("meta")
-                )
-                db.add(asset)
-                db.commit()
-                db.refresh(asset)
-
-            # 블록-에셋 연결
-            block_asset = BlockAsset(
-                block_id=block.id,
-                asset_id=asset.id,
-                score=asset_data.get("score", 0.0),
-                is_primary=(i == 0),
-                chosen_by=ChosenBy.AUTO
-            )
-            db.add(block_asset)
-
+        asset_service.save_and_link_assets(db, block.id, assets_data, clear_existing=True)
         block.status = BlockStatus.MATCHED
     else:
+        asset_service.delete_block_assets(db, block_id)
         block.status = BlockStatus.NO_RESULT
 
     db.commit()
@@ -344,47 +237,14 @@ async def search_assets_by_keyword(
             detail={"message": f"검색 중 오류가 발생했습니다: {str(e)}"}
         )
 
-    # 에셋 저장 및 블록에 연결
+    # 에셋 저장 및 블록에 연결 (AssetService 사용)
     new_block_assets = []
     for asset_data in assets_data:
-        # 기존에 같은 URL의 에셋이 있는지 확인
-        existing_asset = db.query(Asset).filter(
-            Asset.source_url == asset_data["source_url"]
-        ).first()
+        block_asset = asset_service.add_asset_to_block(db, block.id, asset_data)
 
-        if existing_asset:
-            asset = existing_asset
-        else:
-            asset = Asset(
-                provider=asset_data["provider"],
-                asset_type=asset_data["asset_type"],
-                source_url=asset_data["source_url"],
-                thumbnail_url=asset_data["thumbnail_url"],
-                title=asset_data.get("title"),
-                license=asset_data.get("license"),
-                meta=asset_data.get("meta")
-            )
-            db.add(asset)
-            db.commit()
-            db.refresh(asset)
-
-        # 이미 블록에 연결된 에셋인지 확인
-        existing_link = db.query(BlockAsset).filter(
-            BlockAsset.block_id == block_id,
-            BlockAsset.asset_id == asset.id
-        ).first()
-
-        if not existing_link:
-            block_asset = BlockAsset(
-                block_id=block.id,
-                asset_id=asset.id,
-                score=asset_data.get("score", 0.0),
-                is_primary=False,
-                chosen_by=ChosenBy.AUTO
-            )
-            db.add(block_asset)
-            db.commit()
-            db.refresh(block_asset)
+        if block_asset:
+            # 에셋 조회
+            asset = db.query(Asset).filter(Asset.id == block_asset.asset_id).first()
 
             new_block_assets.append(BlockAssetResponse(
                 id=block_asset.id,
@@ -454,8 +314,8 @@ async def extract_block_keywords(
     block.keywords = keywords
     block.status = BlockStatus.DRAFT
 
-    # 기존 에셋 연결 삭제 (재매칭 필요)
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+    # 기존 에셋 연결 삭제 (AssetService 사용)
+    asset_service.delete_block_assets(db, block_id)
 
     db.commit()
     db.refresh(block)
@@ -473,33 +333,12 @@ async def delete_block(
     """블록 삭제"""
     logger.info(f"블록 삭제 요청: block_id={block_id}")
 
-    block = db.query(Block).filter(Block.id == block_id).first()
-    if not block:
-        raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
-
-    project_id = block.project_id
-    deleted_index = block.index
-
-    # 블록-에셋 연결 삭제
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
-
-    # 블록 삭제
-    db.delete(block)
-    db.commit()
-
-    # 후속 블록들 인덱스 재정렬
-    subsequent_blocks = db.query(Block).filter(
-        Block.project_id == project_id,
-        Block.index > deleted_index
-    ).order_by(Block.index).all()
-
-    for b in subsequent_blocks:
-        b.index -= 1
-
-    db.commit()
+    try:
+        block_service.delete_block(db, block_id)
+    except BlockNotFoundError as e:
+        raise HTTPException(status_code=404, detail={"message": e.message})
 
     logger.info(f"블록 삭제 완료: block_id={block_id}")
-
     return {"message": "블록이 삭제되었습니다"}
 
 
@@ -539,8 +378,8 @@ async def generate_text_for_block(
     block.text = generated_text
     block.status = BlockStatus.DRAFT
 
-    # 기존 에셋 연결 삭제 (재매칭 필요)
-    db.query(BlockAsset).filter(BlockAsset.block_id == block_id).delete()
+    # 기존 에셋 연결 삭제 (AssetService 사용)
+    asset_service.delete_block_assets(db, block_id)
 
     db.commit()
     db.refresh(block)

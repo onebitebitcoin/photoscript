@@ -4,8 +4,12 @@ from app.services.script_processor import process_script, ScriptProcessingError
 from app.services.pexels_client import PexelsClient
 from app.services.matcher import match_assets_for_block
 from app.services.text_generator import generate_block_text, generate_block_text_auto, TextGenerationError, detect_mode
+from app.services.asset_service import AssetService
+from app.services.block_service import BlockService
+from app.services.project_service import ProjectService
 
 __all__ = [
+    # 기존 서비스
     "split_script",
     "extract_keywords",
     "KeywordExtractionError",
@@ -17,4 +21,8 @@ __all__ = [
     "generate_block_text_auto",
     "detect_mode",
     "TextGenerationError",
+    # 새 서비스 계층
+    "AssetService",
+    "BlockService",
+    "ProjectService",
 ]
