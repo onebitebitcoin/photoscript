@@ -257,12 +257,17 @@ async def generate_block_text(
         logger.debug("OpenAI API 호출 시작")
         logger.debug(f"User instruction: {user_instruction[:200]}...")
 
-        response = await client.responses.create(
-            model="gpt-5-mini",
-            input=f"{system_prompt}\n\n사용자 요청:\n{user_instruction}"
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_instruction}
+            ],
+            temperature=0.7,
+            max_tokens=500
         )
 
-        generated_text = response.output_text.strip()
+        generated_text = response.choices[0].message.content.strip()
         logger.info(f"텍스트 생성 완료: {len(generated_text)}자, mode={mode}")
 
         return generated_text
