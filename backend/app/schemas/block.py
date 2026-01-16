@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from enum import Enum
 
 
 class BlockResponse(BaseModel):
@@ -86,6 +87,15 @@ class KeywordExtractRequest(BaseModel):
     max_keywords: int = Field(default=5, ge=1, le=10, description="추출할 최대 키워드 수")
 
 
+class TextGenerationMode(str, Enum):
+    """텍스트 생성 모드"""
+    LINK = "link"
+    ENHANCE = "enhance"
+    SEARCH = "search"
+
+
 class GenerateTextRequest(BaseModel):
     """AI 텍스트 생성 요청"""
-    prompt: str = Field(..., min_length=1, description="프롬프트 (URL 또는 지시문)")
+    mode: TextGenerationMode = Field(..., description="생성 모드 (link/enhance/search)")
+    prompt: str = Field(..., min_length=1, description="프롬프트 (URL 또는 검색어)")
+    user_guide: Optional[str] = Field(None, description="사용자 가이드 (강화/반박 등)")

@@ -509,15 +509,22 @@ async def generate_text_for_block(
     request: GenerateTextRequest,
     db: Session = Depends(get_db)
 ):
-    """AI로 블록 텍스트 자동 생성"""
-    logger.info(f"텍스트 생성 요청: block_id={block_id}, prompt={request.prompt[:50]}...")
+    """AI로 블록 텍스트 자동 생성 (3가지 모드)"""
+    logger.info(f"텍스트 생성 요청: block_id={block_id}, mode={request.mode}, prompt={request.prompt[:50]}...")
 
     block = db.query(Block).filter(Block.id == block_id).first()
     if not block:
         raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
 
     try:
-        generated_text = await generate_block_text(request.prompt, block.text)
+        generated_text = await generate_block_text(
+            mode=request.mode,
+            prompt=request.prompt,
+            user_guide=request.user_guide,
+            block_id=block_id,
+            db=db,
+            existing_text=block.text
+        )
     except TextGenerationError as e:
         logger.error(f"텍스트 생성 실패: {e}")
         raise HTTPException(

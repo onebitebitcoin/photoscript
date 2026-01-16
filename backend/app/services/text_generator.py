@@ -6,12 +6,21 @@ URL이나 지시문을 기반으로 LLM이 블록용 텍스트를 생성
 
 import re
 import httpx
-from typing import Optional
+from enum import Enum
+from typing import Optional, Dict, List
 from openai import AsyncOpenAI
+from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.utils.logger import logger
 
 settings = get_settings()
+
+
+class TextGenerationMode(str, Enum):
+    """텍스트 생성 모드"""
+    LINK = "link"
+    ENHANCE = "enhance"
+    SEARCH = "search"
 
 
 class TextGenerationError(Exception):
@@ -63,13 +72,117 @@ async def fetch_url_content(url: str) -> str:
         raise TextGenerationError(f"URL 콘텐츠를 가져올 수 없습니다: {str(e)}")
 
 
-async def generate_block_text(prompt: str, existing_text: Optional[str] = None) -> str:
+async def get_block_context(block_id: str, db: Session) -> Dict[str, Optional[str]]:
     """
-    프롬프트를 기반으로 블록용 텍스트 생성
+    위/아래 블록 텍스트 조회
 
     Args:
-        prompt: URL 또는 지시문
-        existing_text: 기존 블록 텍스트 (있으면 참고)
+        block_id: 현재 블록 ID
+        db: DB 세션
+
+    Returns:
+        {"above": "...", "below": "...", "current_index": N}
+    """
+    from app.models import Block
+
+    block = db.query(Block).filter(Block.id == block_id).first()
+    if not block:
+        logger.warning(f"블록을 찾을 수 없음: block_id={block_id}")
+        return {"above": None, "below": None, "current_index": 0}
+
+    # 위 블록
+    above_block = db.query(Block).filter(
+        Block.project_id == block.project_id,
+        Block.index == block.index - 1
+    ).first()
+
+    # 아래 블록
+    below_block = db.query(Block).filter(
+        Block.project_id == block.project_id,
+        Block.index == block.index + 1
+    ).first()
+
+    logger.info(f"블록 컨텍스트 조회: block_id={block_id}, has_above={above_block is not None}, has_below={below_block is not None}")
+
+    return {
+        "above": above_block.text if above_block else None,
+        "below": below_block.text if below_block else None,
+        "current_index": block.index
+    }
+
+
+def build_link_prompt(url_content: str, user_guide: str, context: Dict) -> str:
+    """링크 모드 프롬프트 생성"""
+    parts = ["다음 URL의 내용을 기반으로 영상 스크립트 블록에 적합한 텍스트를 작성해주세요.\n"]
+
+    if context["above"]:
+        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
+
+    parts.append(f"[URL 내용]\n{url_content}\n")
+
+    if context["below"]:
+        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+
+    if user_guide:
+        parts.append(f"[사용자 가이드]\n{user_guide}")
+
+    return "\n".join(parts)
+
+
+def build_enhance_prompt(user_guide: str, context: Dict) -> str:
+    """보완 모드 프롬프트 생성"""
+    parts = ["위/아래 블록 내용을 참고하여 논리적 흐름을 보완하는 텍스트를 작성해주세요.\n"]
+
+    if context["above"]:
+        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
+
+    parts.append(f"[사용자 요청]\n{user_guide}\n")
+
+    if context["below"]:
+        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+
+    return "\n".join(parts)
+
+
+def build_search_prompt(search_results: List[Dict], user_guide: str, context: Dict) -> str:
+    """검색 모드 프롬프트 생성"""
+    parts = ["웹 검색 결과를 바탕으로 영상 스크립트 블록 텍스트를 작성해주세요.\n"]
+
+    if context["above"]:
+        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
+
+    parts.append("[검색 결과]")
+    for i, result in enumerate(search_results, 1):
+        parts.append(f"{i}. {result['title']}")
+        parts.append(f"   {result['snippet']}\n")
+
+    if user_guide:
+        parts.append(f"[사용자 요청]\n{user_guide}\n")
+
+    if context["below"]:
+        parts.append(f"[다음 블록 내용]\n{context['below']}")
+
+    return "\n".join(parts)
+
+
+async def generate_block_text(
+    mode: TextGenerationMode,
+    prompt: str,
+    user_guide: Optional[str],
+    block_id: str,
+    db: Session,
+    existing_text: Optional[str] = None
+) -> str:
+    """
+    모드별 블록 텍스트 생성
+
+    Args:
+        mode: 생성 모드 (link/enhance/search)
+        prompt: URL 또는 검색어
+        user_guide: 사용자 가이드 (강화/반박 등)
+        block_id: 블록 ID (컨텍스트 조회용)
+        db: DB 세션
+        existing_text: 기존 블록 텍스트
 
     Returns:
         생성된 블록 텍스트
@@ -77,20 +190,44 @@ async def generate_block_text(prompt: str, existing_text: Optional[str] = None) 
     Raises:
         TextGenerationError: 텍스트 생성 실패 시
     """
-    logger.info(f"텍스트 생성 시작: prompt={prompt[:100]}...")
+    logger.info(f"텍스트 생성 시작: mode={mode}, prompt={prompt[:50]}...")
 
+    # OpenAI API 키 확인
     if not settings.openai_api_key:
         logger.error("OpenAI API 키가 설정되지 않음")
         raise TextGenerationError("OpenAI API 키가 설정되지 않았습니다.")
 
-    # URL이면 내용 fetch
-    context = ""
-    if is_url(prompt):
-        context = await fetch_url_content(prompt)
-        user_instruction = f"다음 URL의 내용을 기반으로 영상 스크립트 블록에 적합한 텍스트를 작성해주세요.\n\nURL 내용:\n{context}"
-    else:
-        user_instruction = prompt
+    # 위/아래 블록 컨텍스트 조회
+    context = await get_block_context(block_id, db)
 
+    # 모드별 프롬프트 생성
+    if mode == TextGenerationMode.LINK:
+        if not is_url(prompt):
+            raise TextGenerationError("링크 모드에서는 유효한 URL을 입력해야 합니다.")
+        url_content = await fetch_url_content(prompt)
+        user_instruction = build_link_prompt(url_content, user_guide or "", context)
+
+    elif mode == TextGenerationMode.ENHANCE:
+        if not user_guide:
+            raise TextGenerationError("보완 모드에서는 가이드를 입력해야 합니다.")
+        user_instruction = build_enhance_prompt(user_guide, context)
+
+    elif mode == TextGenerationMode.SEARCH:
+        from app.services.web_search import search_web, WebSearchError
+
+        try:
+            search_results = await search_web(prompt, max_results=5)
+        except WebSearchError as e:
+            raise TextGenerationError(str(e))
+
+        if not search_results:
+            raise TextGenerationError("검색 결과가 없습니다.")
+        user_instruction = build_search_prompt(search_results, user_guide or "", context)
+
+    else:
+        raise TextGenerationError(f"지원하지 않는 모드: {mode}")
+
+    # LLM 호출
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     system_prompt = """당신은 영상 스크립트 작성 전문가입니다.
@@ -101,10 +238,12 @@ async def generate_block_text(prompt: str, existing_text: Optional[str] = None) 
 2. 영상 나레이션에 적합한 톤
 3. 1-3 문장 정도의 짧은 블록 텍스트
 4. 시각적 설명이 가능한 내용 포함
-5. 다른 설명 없이 블록 텍스트만 반환"""
+5. 이전/다음 블록과 자연스럽게 연결
+6. 다른 설명 없이 블록 텍스트만 반환"""
 
     try:
         logger.debug("OpenAI API 호출 시작")
+        logger.debug(f"User instruction: {user_instruction[:200]}...")
 
         response = await client.responses.create(
             model="gpt-5-mini",
@@ -112,10 +251,10 @@ async def generate_block_text(prompt: str, existing_text: Optional[str] = None) 
         )
 
         generated_text = response.output_text.strip()
-        logger.info(f"텍스트 생성 완료: {len(generated_text)}자")
+        logger.info(f"텍스트 생성 완료: {len(generated_text)}자, mode={mode}")
 
         return generated_text
 
     except Exception as e:
-        logger.error(f"텍스트 생성 실패: {e}")
+        logger.error(f"텍스트 생성 실패: mode={mode}, error={str(e)}")
         raise TextGenerationError(f"텍스트 생성 실패: {str(e)}")
