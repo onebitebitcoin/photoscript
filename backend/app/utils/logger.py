@@ -1,14 +1,17 @@
 import logging
 import os
+from pathlib import Path
 from app.config import get_settings
 
 settings = get_settings()
 
-LOG_FILE = "debug.log"
+# backend 폴더 기준 debug.log 경로
+BACKEND_DIR = Path(__file__).parent.parent.parent
+LOG_FILE = BACKEND_DIR / "debug.log"
 
 # 서버 시작 시 기존 로그 삭제
-if os.path.exists(LOG_FILE):
-    os.remove(LOG_FILE)
+if LOG_FILE.exists():
+    LOG_FILE.unlink()
     print(f"[LOG] 기존 로그 파일 삭제: {LOG_FILE}")
 
 
