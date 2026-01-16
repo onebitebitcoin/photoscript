@@ -144,7 +144,7 @@ def build_enhance_prompt(user_guide: str, context: Dict) -> str:
     return "\n".join(parts)
 
 
-def build_search_prompt(search_results: List[Dict], user_guide: str, context: Dict) -> str:
+def build_search_prompt(search_results: List[Dict], user_guide: str, context: Dict, search_source: str = "duckduckgo") -> str:
     """검색 모드 프롬프트 생성"""
     parts = ["웹 검색 결과를 바탕으로 영상 스크립트 블록 텍스트를 작성해주세요.\n"]
 
@@ -160,7 +160,11 @@ def build_search_prompt(search_results: List[Dict], user_guide: str, context: Di
         parts.append(f"[사용자 요청]\n{user_guide}\n")
 
     if context["below"]:
-        parts.append(f"[다음 블록 내용]\n{context['below']}")
+        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+
+    # Fallback 사용 시 출처 명시 지시
+    if search_source == "duckduckgo-instant-answer":
+        parts.append("\n[중요] 텍스트 마지막에 반드시 다음을 추가: (검색: DuckDuckGo Instant Answer API)")
 
     return "\n".join(parts)
 
@@ -216,13 +220,21 @@ async def generate_block_text(
         from app.services.web_search import search_web, WebSearchError
 
         try:
-            search_results = await search_web(prompt, max_results=5)
+            search_data = await search_web(prompt, max_results=5)
         except WebSearchError as e:
             raise TextGenerationError(str(e))
 
-        if not search_results:
+        if not search_data.get("results"):
             raise TextGenerationError("검색 결과가 없습니다.")
-        user_instruction = build_search_prompt(search_results, user_guide or "", context)
+
+        # 검색 출처 저장
+        search_source = search_data.get("source", "unknown")
+        user_instruction = build_search_prompt(
+            search_data["results"],
+            user_guide or "",
+            context,
+            search_source
+        )
 
     else:
         raise TextGenerationError(f"지원하지 않는 모드: {mode}")

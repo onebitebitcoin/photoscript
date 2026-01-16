@@ -10,6 +10,9 @@ aiosqlite==0.19.0
 # HTTP client
 httpx==0.26.0
 
+# Web Search
+duckduckgo-search==4.1.1
+
 # OpenAI
 openai>=2.15.0
 
