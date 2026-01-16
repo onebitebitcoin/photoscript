@@ -373,6 +373,12 @@ async def generate_text_for_block(
             status_code=500,
             detail={"message": f"텍스트 생성 실패: {str(e)}"}
         )
+    except Exception as e:
+        logger.error(f"텍스트 생성 중 예상치 못한 에러: {type(e).__name__}: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"텍스트 생성 중 에러 발생: {type(e).__name__}: {str(e)}"}
+        )
 
     # 블록 텍스트 업데이트
     block.text = result.text
@@ -395,13 +401,16 @@ async def generate_text_for_block(
         full_prompt=result.full_prompt
     )
 
+    # status가 Enum이면 .value, 문자열이면 그대로 사용
+    status_value = block.status.value if hasattr(block.status, 'value') else block.status
+
     return GenerateTextResponse(
         id=block.id,
         project_id=block.project_id,
         index=block.index,
         text=block.text,
         keywords=block.keywords,
-        status=block.status.value,
+        status=status_value,
         created_at=block.created_at,
         updated_at=block.updated_at,
         generation_info=generation_info
