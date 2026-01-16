@@ -33,6 +33,11 @@ api.interceptors.response.use(
  */
 export const projectApi = {
   /**
+   * 프로젝트 목록 조회 (최신순)
+   */
+  list: () => api.get('/projects'),
+
+  /**
    * 프로젝트 생성
    * @param {Object} data - { script_raw, title? }
    */
@@ -43,6 +48,12 @@ export const projectApi = {
    * @param {string} id - 프로젝트 ID
    */
   get: (id) => api.get(`/projects/${id}`),
+
+  /**
+   * 프로젝트 삭제
+   * @param {string} id - 프로젝트 ID
+   */
+  delete: (id) => api.delete(`/projects/${id}`),
 
   /**
    * Generate 실행 (LLM 의미론적 분할 + 에셋 매칭) - Quick Generate용

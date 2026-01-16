@@ -123,9 +123,10 @@ function EditBlocksPage() {
       await projectApi.match(projectId, { video_priority: true })
 
       logger.info('Matching completed', { projectId })
+      toast.success('비주얼 생성 완료!')
 
-      // 결과 페이지로 이동
-      navigate(`/project/${projectId}`)
+      // 홈으로 이동
+      navigate('/')
     } catch (err) {
       const message = err.response?.data?.detail?.message || err.message
       setError(message)
@@ -228,34 +229,31 @@ function EditBlocksPage() {
             >
               <ArrowLeft className="w-5 h-5 text-gray-400" />
             </button>
-            <div>
-              <h1 className="text-lg font-semibold text-white">
-                {project?.title || 'Edit Blocks'}
-              </h1>
-              <p className="text-xs text-gray-400">
-                {blocks.length} blocks
-              </p>
-            </div>
+            <h1 className="text-lg font-semibold text-white truncate">
+              {project?.title || '제목 없음'}
+            </h1>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selectedIds.length < 2 || isMerging}
-              loading={isMerging}
-              onClick={handleMergeBlocks}
-              icon={Merge}
-            >
-              Merge ({selectedIds.length})
-            </Button>
+            {selectedIds.length >= 2 && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isMerging}
+                loading={isMerging}
+                onClick={handleMergeBlocks}
+                icon={Merge}
+              >
+                합치기
+              </Button>
+            )}
             <Button
               size="sm"
               loading={isMatching}
               onClick={handleGenerateVisuals}
               icon={Sparkles}
             >
-              Generate Visuals
+              비주얼 생성
             </Button>
           </div>
         </div>
@@ -275,14 +273,6 @@ function EditBlocksPage() {
           </button>
         </div>
       )}
-
-      {/* 안내 메시지 */}
-      <div className="mx-4 mt-4 p-3 bg-primary/10 border border-primary/30 rounded-lg">
-        <p className="text-sm text-primary">
-          블록을 편집하고 키워드를 수정한 후 "Generate Visuals"를 클릭하세요.
-          영상을 우선으로 검색합니다.
-        </p>
-      </div>
 
       {/* 블록 목록 */}
       <div className="flex-1 overflow-y-auto p-4">
