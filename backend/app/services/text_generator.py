@@ -28,6 +28,51 @@ class TextGenerationError(Exception):
     pass
 
 
+def remove_source_references(text: str) -> str:
+    """
+    생성된 텍스트에서 출처/참고 관련 내용 제거
+
+    제거 패턴:
+    - "출처: ..." 또는 "출처 : ..."
+    - "참고: ..." 또는 "참고 : ..."
+    - "Source: ..." 또는 "Reference: ..."
+    - URL만 있는 줄
+    - 괄호 안의 URL (예: (https://...))
+    """
+    if not text:
+        return text
+
+    lines = text.split('\n')
+    cleaned_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+
+        # 출처/참고로 시작하는 줄 제거
+        if re.match(r'^(출처|참고|Source|Reference)\s*[:：]', stripped, re.IGNORECASE):
+            continue
+
+        # URL만 있는 줄 제거
+        if re.match(r'^https?://\S+$', stripped):
+            continue
+
+        # 빈 줄이 아니면 추가
+        if stripped or cleaned_lines:  # 맨 앞 빈줄은 제외
+            cleaned_lines.append(line)
+
+    # 텍스트 내 괄호 안 URL 제거 (예: (https://example.com))
+    result = '\n'.join(cleaned_lines)
+    result = re.sub(r'\s*\(https?://[^\)]+\)', '', result)
+
+    # 텍스트 내 인라인 출처 제거 (예: "출처: https://..." 또는 "- 출처: ...")
+    result = re.sub(r'[-–—]?\s*(출처|참고|Source|Reference)\s*[:：]\s*\S+', '', result, flags=re.IGNORECASE)
+
+    # 마지막 빈 줄 정리
+    result = result.rstrip()
+
+    return result
+
+
 def is_url(text: str) -> bool:
     """URL인지 확인"""
     url_pattern = re.compile(
@@ -305,6 +350,8 @@ async def generate_block_text(
             )
 
             generated_text = response.output_text.strip()
+            # 출처/참고 제거
+            generated_text = remove_source_references(generated_text)
             logger.info(f"텍스트 생성 완료 (web_search): {len(generated_text)}자")
 
             return generated_text
@@ -342,6 +389,8 @@ async def generate_block_text(
         )
 
         generated_text = response.output_text.strip()
+        # 출처/참고 제거
+        generated_text = remove_source_references(generated_text)
         logger.info(f"텍스트 생성 완료: {len(generated_text)}자, mode={mode}")
 
         return generated_text
