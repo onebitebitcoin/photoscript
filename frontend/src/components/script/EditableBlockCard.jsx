@@ -330,7 +330,15 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
               <textarea
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="URL, '검색해서' 포함 검색어, 또는 직접 지시..."
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                    e.preventDefault()
+                    if (aiPrompt.trim() && !isGeneratingText) {
+                      handleGenerateText()
+                    }
+                  }
+                }}
+                placeholder="URL, '검색해서' 포함 검색어, 또는 직접 지시... (Cmd+Enter로 생성)"
                 className="w-full bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary resize-none"
                 rows={2}
               />
