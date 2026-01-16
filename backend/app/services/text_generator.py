@@ -174,7 +174,7 @@ def build_link_prompt(url_content: str, user_guide: str, context: Dict) -> str:
 - 입니다체(존댓말)로 작성
 - 1-3 문장의 간결한 블록 텍스트만 반환
 - 다른 설명 없이 스크립트 내용만 출력
-- 스크립트 마지막에 줄바꿈 후 "출처: (URL 또는 사이트명)" 형식으로 출처 표시""")
+- 스크립트 마지막에 줄바꿈 후 "출처: 전체URL주소" 형식으로 출처 표시 (반드시 https://로 시작하는 전체 URL 포함)""")
 
     return "\n".join(parts)
 
@@ -220,7 +220,7 @@ def build_search_prompt(search_query: str, user_guide: str, context: Dict) -> st
 - 입니다체(존댓말)로 작성
 - 1-3 문장의 간결한 블록 텍스트만 반환
 - 다른 설명 없이 스크립트 내용만 출력
-- 스크립트 마지막에 줄바꿈 후 "출처: (참고한 URL 또는 사이트명)" 형식으로 출처 표시""")
+- 스크립트 마지막에 줄바꿈 후 "출처: 전체URL주소" 형식으로 출처 표시 (반드시 https://로 시작하는 전체 URL 포함)""")
 
     return "\n".join(parts)
 

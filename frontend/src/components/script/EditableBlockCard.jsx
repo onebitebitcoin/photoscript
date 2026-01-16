@@ -30,6 +30,40 @@ function detectMode(prompt) {
 }
 
 /**
+ * 텍스트에서 URL을 감지하여 클릭 가능한 링크로 변환
+ * @param {string} text - 원본 텍스트
+ * @returns {JSX.Element[]} - 텍스트와 링크가 혼합된 JSX 배열
+ */
+function renderTextWithLinks(text) {
+  if (!text) return null
+
+  // URL 패턴 (http/https)
+  const urlPattern = /(https?:\/\/[^\s]+)/g
+  const parts = text.split(urlPattern)
+
+  return parts.map((part, index) => {
+    // URL인지 확인 (새로운 regex 인스턴스로 테스트)
+    if (/^https?:\/\//.test(part)) {
+      // URL인 경우 링크로 렌더링
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary hover:text-primary-hover underline break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      )
+    }
+    // 일반 텍스트
+    return <span key={index}>{part}</span>
+  })
+}
+
+/**
  * 편집 가능한 블록 카드 컴포넌트
  * @param {Object} block - 블록 데이터
  * @param {boolean} isSelected - 선택 여부
@@ -339,8 +373,8 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
               rows={Math.min(20, Math.max(6, text.split('\n').length + 1))}
             />
           ) : (
-            <p className="text-sm text-gray-200 whitespace-pre-wrap line-clamp-6">
-              {block.text}
+            <p className="text-sm text-gray-200 whitespace-pre-wrap">
+              {renderTextWithLinks(block.text)}
             </p>
           )}
 
