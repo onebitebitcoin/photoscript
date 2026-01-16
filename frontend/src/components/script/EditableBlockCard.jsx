@@ -344,16 +344,18 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
             </p>
           )}
 
-          {/* 키워드 */}
-          <div>
-            <p className="text-xs text-gray-500 mb-1.5">Keywords</p>
-            <KeywordEditor
-              keywords={isEditing ? keywords : (block.keywords || [])}
-              onChange={setKeywords}
-              editable={isEditing}
-              maxKeywords={10}
-            />
-          </div>
+          {/* 키워드 (편집 모드에서만) */}
+          {isEditing && (
+            <div>
+              <p className="text-xs text-gray-500 mb-1.5">Keywords</p>
+              <KeywordEditor
+                keywords={keywords}
+                onChange={setKeywords}
+                editable={true}
+                maxKeywords={10}
+              />
+            </div>
+          )}
 
           {/* 에셋 미리보기 */}
           {!isEditing && (
