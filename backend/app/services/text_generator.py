@@ -40,6 +40,49 @@ def is_url(text: str) -> bool:
     return bool(url_pattern.match(text.strip()))
 
 
+def detect_mode(prompt: str) -> tuple[TextGenerationMode, str, Optional[str]]:
+    """
+    프롬프트를 분석하여 자동으로 모드를 판단
+
+    Returns:
+        (mode, extracted_prompt, user_guide)
+        - mode: 판단된 모드
+        - extracted_prompt: URL 또는 검색어 (해당하는 경우)
+        - user_guide: 사용자 가이드 (추가 지시사항)
+    """
+    prompt = prompt.strip()
+
+    # 1. URL 패턴 확인 (URL이 포함되어 있으면 LINK 모드)
+    url_match = re.search(r'(https?://[^\s]+)', prompt)
+    if url_match:
+        url = url_match.group(1)
+        # URL 제거 후 남은 텍스트를 가이드로 사용
+        user_guide = re.sub(r'https?://[^\s]+', '', prompt).strip()
+        logger.info(f"자동 모드 판단: LINK (URL={url}, guide={user_guide or 'None'})")
+        return (TextGenerationMode.LINK, url, user_guide or None)
+
+    # 2. 검색 키워드 확인
+    search_keywords = ['검색해서', '찾아서', '검색해줘', '찾아줘', '알아봐서', '알아봐줘']
+    for kw in search_keywords:
+        if kw in prompt:
+            idx = prompt.find(kw)
+            # 키워드 앞부분이 검색어, 뒷부분이 가이드
+            search_query = prompt[:idx].strip()
+            user_guide = prompt[idx + len(kw):].strip()
+
+            # 검색어가 없으면 가이드를 검색어로 사용
+            if not search_query:
+                search_query = user_guide
+                user_guide = None
+
+            logger.info(f"자동 모드 판단: SEARCH (query={search_query}, guide={user_guide or 'None'})")
+            return (TextGenerationMode.SEARCH, search_query, user_guide)
+
+    # 3. 그 외: ENHANCE 모드 (입력 전체가 가이드)
+    logger.info(f"자동 모드 판단: ENHANCE (guide={prompt[:50]}...)")
+    return (TextGenerationMode.ENHANCE, prompt, None)
+
+
 async def fetch_url_content(url: str) -> str:
     """URL에서 텍스트 콘텐츠 추출"""
     logger.info(f"URL 콘텐츠 fetch: {url}")
@@ -306,3 +349,42 @@ async def generate_block_text(
     except Exception as e:
         logger.error(f"텍스트 생성 실패: mode={mode}, error={str(e)}")
         raise TextGenerationError(f"텍스트 생성 실패: {str(e)}")
+
+
+async def generate_block_text_auto(
+    prompt: str,
+    block_id: str,
+    db: Session,
+    existing_text: Optional[str] = None
+) -> tuple[str, TextGenerationMode]:
+    """
+    프롬프트를 자동 분석하여 적절한 모드로 블록 텍스트 생성
+
+    Args:
+        prompt: 사용자 입력 프롬프트 (URL, 검색어, 또는 지시문)
+        block_id: 블록 ID (컨텍스트 조회용)
+        db: DB 세션
+        existing_text: 기존 블록 텍스트
+
+    Returns:
+        (생성된 텍스트, 사용된 모드)
+
+    Raises:
+        TextGenerationError: 텍스트 생성 실패 시
+    """
+    # 자동 모드 판단
+    mode, extracted_prompt, user_guide = detect_mode(prompt)
+
+    logger.info(f"자동 텍스트 생성 시작: detected_mode={mode}, prompt={extracted_prompt[:50]}...")
+
+    # 기존 generate_block_text 호출
+    generated_text = await generate_block_text(
+        mode=mode,
+        prompt=extracted_prompt,
+        user_guide=user_guide,
+        block_id=block_id,
+        db=db,
+        existing_text=existing_text
+    )
+
+    return generated_text, mode

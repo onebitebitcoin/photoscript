@@ -1,8 +1,33 @@
-import { useState, useEffect } from 'react'
-import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2, Trash2, Sparkles } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Wand2, Trash2, Sparkles, Link, Globe, MessageSquare } from 'lucide-react'
 import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 import toast from 'react-hot-toast'
+
+/**
+ * 프롬프트에서 모드를 자동 감지
+ * @param {string} prompt - 사용자 입력
+ * @returns {{ mode: 'link' | 'search' | 'enhance', label: string, icon: string }}
+ */
+function detectMode(prompt) {
+  const trimmed = prompt.trim()
+
+  // 1. URL 패턴 확인
+  if (/https?:\/\/[^\s]+/.test(trimmed)) {
+    return { mode: 'link', label: '링크', description: 'URL 콘텐츠 참고' }
+  }
+
+  // 2. 검색 키워드 확인
+  const searchKeywords = ['검색해서', '찾아서', '검색해줘', '찾아줘', '알아봐서', '알아봐줘']
+  for (const kw of searchKeywords) {
+    if (trimmed.includes(kw)) {
+      return { mode: 'search', label: '검색', description: '웹 검색 후 생성' }
+    }
+  }
+
+  // 3. 그 외: 보완 모드
+  return { mode: 'enhance', label: '보완', description: '컨텍스트 기반 생성' }
+}
 
 /**
  * 편집 가능한 블록 카드 컴포넌트
@@ -30,10 +55,11 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
   const [selectingAssetId, setSelectingAssetId] = useState(null) // 선택 중인 에셋
   const [showCount, setShowCount] = useState(4) // 표시할 에셋 개수
   const [isExtractingKeywords, setIsExtractingKeywords] = useState(false) // 키워드 추출 중
-  const [aiMode, setAiMode] = useState('link') // AI 모드: 'link' | 'enhance' | 'search'
-  const [aiPrompt, setAiPrompt] = useState('') // AI 프롬프트 입력 (URL 또는 검색어)
-  const [aiGuide, setAiGuide] = useState('') // AI 가이드 입력 (강화/반박 등)
+  const [aiPrompt, setAiPrompt] = useState('') // AI 프롬프트 입력 (통합)
   const [isGeneratingText, setIsGeneratingText] = useState(false) // 텍스트 생성 중
+
+  // 실시간 모드 감지
+  const detectedMode = useMemo(() => detectMode(aiPrompt), [aiPrompt])
 
   // 새 블록인 경우 자동으로 편집 모드 진입
   useEffect(() => {
@@ -175,39 +201,20 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
     }
   }
 
-  // 입력 검증
-  const isValidInput = () => {
-    if (aiMode === 'link') {
-      return aiPrompt.trim().startsWith('http')
-    } else if (aiMode === 'enhance') {
-      return aiGuide.trim().length > 0
-    } else if (aiMode === 'search') {
-      return aiPrompt.trim().length > 0
-    }
-    return false
-  }
-
   // AI로 텍스트 자동 생성
   const handleGenerateText = async () => {
-    if (!isValidInput()) {
-      const errorMsg =
-        aiMode === 'link' ? 'URL을 입력해주세요' :
-        aiMode === 'enhance' ? '가이드를 입력해주세요' :
-        '검색어를 입력해주세요'
-      toast.error(errorMsg)
+    if (!aiPrompt.trim()) {
+      toast.error('프롬프트를 입력해주세요')
       return
     }
 
     setIsGeneratingText(true)
     try {
       const { data: updatedBlock } = await blockApi.generateText(block.id, {
-        mode: aiMode,
-        prompt: aiMode === 'enhance' ? aiGuide : aiPrompt,
-        user_guide: aiMode === 'enhance' ? null : (aiGuide || null)
+        prompt: aiPrompt
       })
       setText(updatedBlock.text)
       setAiPrompt('')
-      setAiGuide('')
       toast.success('텍스트가 생성되었습니다')
     } catch (err) {
       console.error('Failed to generate text:', err)
@@ -296,75 +303,41 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
           {/* AI 텍스트 생성 (편집 모드에서만) */}
           {isEditing && (
             <div className="space-y-2 bg-dark-bg border border-dark-border rounded-md p-3">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-medium text-gray-400">AI 텍스트 생성</span>
+                {/* 실시간 모드 표시 */}
+                {aiPrompt.trim() && (
+                  <span className={`text-xs px-2 py-0.5 rounded flex items-center gap-1 ${
+                    detectedMode.mode === 'link' ? 'bg-blue-500/20 text-blue-400' :
+                    detectedMode.mode === 'search' ? 'bg-purple-500/20 text-purple-400' :
+                    'bg-green-500/20 text-green-400'
+                  }`}>
+                    {detectedMode.mode === 'link' && <Link className="w-3 h-3" />}
+                    {detectedMode.mode === 'search' && <Globe className="w-3 h-3" />}
+                    {detectedMode.mode === 'enhance' && <MessageSquare className="w-3 h-3" />}
+                    <span>{detectedMode.label}</span>
+                  </span>
+                )}
               </div>
 
-              {/* 모드 선택 - 라디오 버튼 */}
-              <div className="flex gap-2">
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name={`aiMode-${block.id}`}
-                    value="link"
-                    checked={aiMode === 'link'}
-                    onChange={(e) => setAiMode(e.target.value)}
-                    className="w-3 h-3 text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs text-gray-300">링크</span>
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name={`aiMode-${block.id}`}
-                    value="enhance"
-                    checked={aiMode === 'enhance'}
-                    onChange={(e) => setAiMode(e.target.value)}
-                    className="w-3 h-3 text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs text-gray-300">보완</span>
-                </label>
-                <label className="flex items-center gap-1 cursor-pointer">
-                  <input
-                    type="radio"
-                    name={`aiMode-${block.id}`}
-                    value="search"
-                    checked={aiMode === 'search'}
-                    onChange={(e) => setAiMode(e.target.value)}
-                    className="w-3 h-3 text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs text-gray-300">검색</span>
-                </label>
-              </div>
-
-              {/* 프롬프트 입력 (링크/검색 모드) */}
-              {(aiMode === 'link' || aiMode === 'search') && (
-                <input
-                  type="text"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  placeholder={aiMode === 'link' ? 'URL 입력...' : '검색어 입력...'}
-                  className="w-full bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary"
-                />
-              )}
-
-              {/* 가이드 입력 (모든 모드에서 선택적, 보완 모드는 필수) */}
+              {/* 단일 프롬프트 입력 */}
               <textarea
-                value={aiGuide}
-                onChange={(e) => setAiGuide(e.target.value)}
-                placeholder={
-                  aiMode === 'enhance'
-                    ? '가이드 입력 (예: 위 블록 강화, 반박 근거 추가...)'
-                    : '추가 가이드 (선택사항)'
-                }
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="URL, '검색해서' 포함 검색어, 또는 직접 지시..."
                 className="w-full bg-dark-bg border border-dark-border rounded px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary resize-none"
                 rows={2}
               />
 
+              {/* 모드 힌트 */}
+              <p className="text-xs text-gray-500">
+                {detectedMode.description}
+              </p>
+
               {/* 생성 버튼 */}
               <button
                 onClick={handleGenerateText}
-                disabled={isGeneratingText || !isValidInput()}
+                disabled={isGeneratingText || !aiPrompt.trim()}
                 className="w-full px-3 py-1.5 bg-primary/20 hover:bg-primary/30 rounded text-xs text-primary hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
               >
                 {isGeneratingText ? (

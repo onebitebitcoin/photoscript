@@ -7,7 +7,7 @@ from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
 from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest, GenerateTextRequest
-from app.services import extract_keywords, KeywordExtractionError, generate_block_text, TextGenerationError
+from app.services import extract_keywords, KeywordExtractionError, generate_block_text_auto, TextGenerationError
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
 from app.config import get_settings
@@ -509,18 +509,21 @@ async def generate_text_for_block(
     request: GenerateTextRequest,
     db: Session = Depends(get_db)
 ):
-    """AI로 블록 텍스트 자동 생성 (3가지 모드)"""
-    logger.info(f"텍스트 생성 요청: block_id={block_id}, mode={request.mode}, prompt={request.prompt[:50]}...")
+    """AI로 블록 텍스트 자동 생성 (자동 모드 판단)
+
+    - URL 포함 시: 해당 URL 콘텐츠를 읽어서 참고
+    - '검색해서', '찾아서' 등 포함 시: 웹 검색 후 생성
+    - 그 외: 컨텍스트만으로 텍스트 생성
+    """
+    logger.info(f"텍스트 생성 요청: block_id={block_id}, prompt={request.prompt[:50]}...")
 
     block = db.query(Block).filter(Block.id == block_id).first()
     if not block:
         raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
 
     try:
-        generated_text = await generate_block_text(
-            mode=request.mode,
+        generated_text, detected_mode = await generate_block_text_auto(
             prompt=request.prompt,
-            user_guide=request.user_guide,
             block_id=block_id,
             db=db,
             existing_text=block.text
@@ -542,6 +545,6 @@ async def generate_text_for_block(
     db.commit()
     db.refresh(block)
 
-    logger.info(f"텍스트 생성 완료: block_id={block_id}, text_length={len(generated_text)}")
+    logger.info(f"텍스트 생성 완료: block_id={block_id}, mode={detected_mode}, text_length={len(generated_text)}")
 
     return block
