@@ -246,6 +246,54 @@ class TestRemoveSourceReferences:
         # 연속된 공백이 하나로 정리
         assert "  " not in result
 
+    def test_remove_markdown_link(self):
+        """마크다운 링크 제거 [text](URL)"""
+        text = "내용입니다 [참고](https://example.com/page) 추가 내용"
+        result = remove_source_references(text)
+
+        assert "example.com" not in result
+        assert "참고" not in result
+        assert "내용입니다" in result
+        assert "추가 내용" in result
+
+    def test_remove_markdown_link_in_parentheses(self):
+        """괄호 안 마크다운 링크 제거 ([text](URL))"""
+        text = "설명입니다. ([static.hlt.bme.hu](https://static.hlt.bme.hu/page.html?utm_source=openai))"
+        result = remove_source_references(text)
+
+        assert "static.hlt.bme.hu" not in result
+        assert "openai" not in result
+        assert "설명입니다." in result
+
+    def test_remove_multiple_markdown_links(self):
+        """여러 마크다운 링크 제거"""
+        text = """첫 번째 설명. ([link1](https://a.com))
+두 번째 설명. ([link2](https://b.com/path?utm=test))
+세 번째 설명."""
+        result = remove_source_references(text)
+
+        assert "https://" not in result
+        assert "link1" not in result
+        assert "link2" not in result
+        assert "첫 번째 설명." in result
+        assert "두 번째 설명." in result
+        assert "세 번째 설명." in result
+
+    def test_remove_openai_search_result_format(self):
+        """OpenAI 검색 결과 형식 제거 (실제 예제)"""
+        text = """공개키는 개인키로부터 수학적으로 만들어지는 쌍의 한쪽 열쇠입니다. ([static.hlt.bme.hu](https://static.hlt.bme.hu/semantics/external/pages/page.html?utm_source=openai))
+특히 비트코인은 타원곡선 암호를 사용합니다. ([daily.from-my-daily.com](https://daily.from-my-daily.com/entry/test?utm_source=openai))
+
+출처: https://ethereum.org/developers/docs/accounts/"""
+        result = remove_source_references(text)
+
+        assert "https://" not in result
+        assert "utm_source" not in result
+        assert "static.hlt.bme.hu" not in result
+        assert "출처" not in result
+        assert "공개키는" in result
+        assert "비트코인은" in result
+
 
 class TestIsUrl:
     """is_url() 함수 테스트"""

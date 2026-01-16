@@ -67,6 +67,7 @@ def remove_source_references(text: str, remove_inline_urls: bool = True) -> str:
     - URL만 있는 줄
     - 괄호 안의 URL (예: (https://...))
     - 대괄호 안의 URL (예: [https://...])
+    - 마크다운 링크 (예: [text](URL), ([text](URL)))
     - 인라인 URL (remove_inline_urls=True인 경우)
 
     Args:
@@ -94,8 +95,15 @@ def remove_source_references(text: str, remove_inline_urls: bool = True) -> str:
         if stripped or cleaned_lines:  # 맨 앞 빈줄은 제외
             cleaned_lines.append(line)
 
-    # 텍스트 내 괄호 안 URL 제거 (예: (https://example.com))
     result = '\n'.join(cleaned_lines)
+
+    # 마크다운 링크 in 괄호 제거: ([text](URL)) 또는 ( [text](URL) )
+    result = re.sub(r'\s*\(\s*\[[^\]]*\]\s*\(https?://[^\)]+\)\s*\)', '', result)
+
+    # 마크다운 링크 제거: [text](URL)
+    result = re.sub(r'\s*\[[^\]]*\]\s*\(https?://[^\)]+\)', '', result)
+
+    # 텍스트 내 괄호 안 URL 제거 (예: (https://example.com))
     result = re.sub(r'\s*\(https?://[^\)]+\)', '', result)
 
     # 텍스트 내 대괄호 안 URL 제거 (예: [https://example.com])
@@ -409,7 +417,8 @@ async def generate_block_text(
             )
 
             generated_text = response.output_text.strip()
-            # 검색 모드에서는 출처 유지 (후처리 하지 않음)
+            # 검색 모드에서도 출처/URL 제거
+            generated_text = remove_source_references(generated_text)
             logger.info(f"텍스트 생성 완료 (web_search): {len(generated_text)}자")
 
             return GenerationResult(
