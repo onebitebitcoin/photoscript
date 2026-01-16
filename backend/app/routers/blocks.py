@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
-from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest, GenerateTextRequest
+from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest, GenerateTextRequest, GenerateTextResponse, GenerationInfo
 from app.services import extract_keywords, KeywordExtractionError, generate_block_text_auto, TextGenerationError
 from app.services.matcher import match_assets_for_block
 from app.services.pexels_client import PexelsClient
@@ -342,7 +342,7 @@ async def delete_block(
     return {"message": "블록이 삭제되었습니다"}
 
 
-@router.post("/{block_id}/generate-text", response_model=BlockResponse)
+@router.post("/{block_id}/generate-text", response_model=GenerateTextResponse)
 async def generate_text_for_block(
     block_id: str,
     request: GenerateTextRequest,
@@ -361,7 +361,7 @@ async def generate_text_for_block(
         raise HTTPException(status_code=404, detail={"message": "블록을 찾을 수 없습니다"})
 
     try:
-        generated_text, detected_mode = await generate_block_text_auto(
+        result = await generate_block_text_auto(
             prompt=request.prompt,
             block_id=block_id,
             db=db,
@@ -375,7 +375,7 @@ async def generate_text_for_block(
         )
 
     # 블록 텍스트 업데이트
-    block.text = generated_text
+    block.text = result.text
     block.status = BlockStatus.DRAFT
 
     # 기존 에셋 연결 삭제 (AssetService 사용)
@@ -384,6 +384,25 @@ async def generate_text_for_block(
     db.commit()
     db.refresh(block)
 
-    logger.info(f"텍스트 생성 완료: block_id={block_id}, mode={detected_mode}, text_length={len(generated_text)}")
+    logger.info(f"텍스트 생성 완료: block_id={block_id}, mode={result.mode}, text_length={len(result.text)}")
 
-    return block
+    # 생성 정보 포함 응답
+    generation_info = GenerationInfo(
+        mode=result.mode.value,
+        model=result.model,
+        user_prompt=result.user_prompt,
+        system_prompt=result.system_prompt,
+        full_prompt=result.full_prompt
+    )
+
+    return GenerateTextResponse(
+        id=block.id,
+        project_id=block.project_id,
+        index=block.index,
+        text=block.text,
+        keywords=block.keywords,
+        status=block.status.value,
+        created_at=block.created_at,
+        updated_at=block.updated_at,
+        generation_info=generation_info
+    )

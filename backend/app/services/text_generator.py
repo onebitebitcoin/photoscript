@@ -28,7 +28,35 @@ class TextGenerationError(Exception):
     pass
 
 
-def remove_source_references(text: str) -> str:
+class GenerationResult:
+    """텍스트 생성 결과 (생성 정보 포함)"""
+    def __init__(
+        self,
+        text: str,
+        mode: "TextGenerationMode",
+        model: str,
+        user_prompt: str,
+        system_prompt: str,
+        full_prompt: str
+    ):
+        self.text = text
+        self.mode = mode
+        self.model = model
+        self.user_prompt = user_prompt
+        self.system_prompt = system_prompt
+        self.full_prompt = full_prompt
+
+    def to_dict(self) -> Dict:
+        return {
+            "mode": self.mode.value,
+            "model": self.model,
+            "user_prompt": self.user_prompt,
+            "system_prompt": self.system_prompt,
+            "full_prompt": self.full_prompt
+        }
+
+
+def remove_source_references(text: str, remove_inline_urls: bool = True) -> str:
     """
     생성된 텍스트에서 출처/참고 관련 내용 제거
 
@@ -38,6 +66,12 @@ def remove_source_references(text: str) -> str:
     - "Source: ..." 또는 "Reference: ..."
     - URL만 있는 줄
     - 괄호 안의 URL (예: (https://...))
+    - 대괄호 안의 URL (예: [https://...])
+    - 인라인 URL (remove_inline_urls=True인 경우)
+
+    Args:
+        text: 원본 텍스트
+        remove_inline_urls: 텍스트 내 인라인 URL도 제거할지 여부
     """
     if not text:
         return text
@@ -64,8 +98,22 @@ def remove_source_references(text: str) -> str:
     result = '\n'.join(cleaned_lines)
     result = re.sub(r'\s*\(https?://[^\)]+\)', '', result)
 
+    # 텍스트 내 대괄호 안 URL 제거 (예: [https://example.com])
+    result = re.sub(r'\s*\[https?://[^\]]+\]', '', result)
+
     # 텍스트 내 인라인 출처 제거 (예: "출처: https://..." 또는 "- 출처: ...")
     result = re.sub(r'[-–—]?\s*(출처|참고|Source|Reference)\s*[:：]\s*\S+', '', result, flags=re.IGNORECASE)
+
+    # 인라인 URL 제거 (옵션)
+    if remove_inline_urls:
+        # 문장 내 URL 제거 (앞뒤 공백 정리)
+        result = re.sub(r'\s*https?://[^\s]+', '', result)
+
+    # 연속된 공백을 하나로 정리
+    result = re.sub(r'  +', ' ', result)
+
+    # 빈 줄이 연속으로 있으면 하나로 정리
+    result = re.sub(r'\n\s*\n\s*\n', '\n\n', result)
 
     # 마지막 빈 줄 정리
     result = result.rstrip()
@@ -282,8 +330,9 @@ async def generate_block_text(
     user_guide: Optional[str],
     block_id: str,
     db: Session,
-    existing_text: Optional[str] = None
-) -> str:
+    existing_text: Optional[str] = None,
+    original_prompt: Optional[str] = None
+) -> GenerationResult:
     """
     모드별 블록 텍스트 생성
 
@@ -294,9 +343,10 @@ async def generate_block_text(
         block_id: 블록 ID (컨텍스트 조회용)
         db: DB 세션
         existing_text: 기존 블록 텍스트
+        original_prompt: 원본 사용자 프롬프트
 
     Returns:
-        생성된 블록 텍스트
+        GenerationResult: 생성된 텍스트와 생성 정보
 
     Raises:
         TextGenerationError: 텍스트 생성 실패 시
@@ -310,6 +360,9 @@ async def generate_block_text(
 
     # 위/아래 블록 컨텍스트 조회
     context = await get_block_context(block_id, db)
+
+    model_name = "gpt-5-mini"
+    user_prompt = original_prompt or prompt
 
     # 모드별 프롬프트 생성
     if mode == TextGenerationMode.LINK:
@@ -347,7 +400,7 @@ async def generate_block_text(
             logger.debug(f"Search query: {prompt}")
 
             response = await client.responses.create(
-                model="gpt-5-mini",
+                model=model_name,
                 tools=[{"type": "web_search"}],
                 input=[
                     {"role": "system", "content": search_system_prompt},
@@ -359,7 +412,14 @@ async def generate_block_text(
             # 검색 모드에서는 출처 유지 (후처리 하지 않음)
             logger.info(f"텍스트 생성 완료 (web_search): {len(generated_text)}자")
 
-            return generated_text
+            return GenerationResult(
+                text=generated_text,
+                mode=mode,
+                model=model_name,
+                user_prompt=user_prompt,
+                system_prompt=search_system_prompt,
+                full_prompt=user_instruction
+            )
 
         except Exception as e:
             logger.error(f"텍스트 생성 실패 (web_search): error={str(e)}")
@@ -386,7 +446,7 @@ async def generate_block_text(
         logger.debug(f"User instruction: {user_instruction[:200]}...")
 
         response = await client.responses.create(
-            model="gpt-5-mini",
+            model=model_name,
             input=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_instruction}
@@ -398,7 +458,14 @@ async def generate_block_text(
         generated_text = remove_source_references(generated_text)
         logger.info(f"텍스트 생성 완료: {len(generated_text)}자, mode={mode}")
 
-        return generated_text
+        return GenerationResult(
+            text=generated_text,
+            mode=mode,
+            model=model_name,
+            user_prompt=user_prompt,
+            system_prompt=system_prompt,
+            full_prompt=user_instruction
+        )
 
     except Exception as e:
         logger.error(f"텍스트 생성 실패: mode={mode}, error={str(e)}")
@@ -410,7 +477,7 @@ async def generate_block_text_auto(
     block_id: str,
     db: Session,
     existing_text: Optional[str] = None
-) -> tuple[str, TextGenerationMode]:
+) -> GenerationResult:
     """
     프롬프트를 자동 분석하여 적절한 모드로 블록 텍스트 생성
 
@@ -421,7 +488,7 @@ async def generate_block_text_auto(
         existing_text: 기존 블록 텍스트
 
     Returns:
-        (생성된 텍스트, 사용된 모드)
+        GenerationResult: 생성된 텍스트와 생성 정보
 
     Raises:
         TextGenerationError: 텍스트 생성 실패 시
@@ -432,13 +499,14 @@ async def generate_block_text_auto(
     logger.info(f"자동 텍스트 생성 시작: detected_mode={mode}, prompt={extracted_prompt[:50]}...")
 
     # 기존 generate_block_text 호출
-    generated_text = await generate_block_text(
+    result = await generate_block_text(
         mode=mode,
         prompt=extracted_prompt,
         user_guide=user_guide,
         block_id=block_id,
         db=db,
-        existing_text=existing_text
+        existing_text=existing_text,
+        original_prompt=prompt
     )
 
-    return generated_text, mode
+    return result

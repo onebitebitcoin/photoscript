@@ -89,3 +89,28 @@ class KeywordExtractRequest(BaseModel):
 class GenerateTextRequest(BaseModel):
     """AI 텍스트 생성 요청 (자동 모드 판단)"""
     prompt: str = Field(..., min_length=1, description="프롬프트 (URL 포함 시 링크 모드, '검색해서' 등 포함 시 검색 모드, 그 외 보완 모드)")
+
+
+class GenerationInfo(BaseModel):
+    """AI 텍스트 생성 정보"""
+    mode: str = Field(..., description="감지된 모드 (link/search/enhance)")
+    model: str = Field(..., description="사용된 모델")
+    user_prompt: str = Field(..., description="사용자 입력 프롬프트")
+    system_prompt: str = Field(..., description="시스템 프롬프트")
+    full_prompt: str = Field(..., description="LLM에 전달된 전체 프롬프트")
+
+
+class GenerateTextResponse(BaseModel):
+    """AI 텍스트 생성 응답 (생성 정보 포함)"""
+    id: str
+    project_id: str
+    index: int
+    text: str
+    keywords: Optional[List[str]]
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    generation_info: Optional[GenerationInfo] = None
+
+    class Config:
+        from_attributes = True
