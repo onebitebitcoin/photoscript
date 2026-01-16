@@ -388,7 +388,7 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="w-full bg-dark-bg border border-dark-border rounded-md p-2 text-sm text-white resize-none focus:outline-none focus:border-primary"
-              rows={Math.min(10, Math.max(3, text.split('\n').length + 1))}
+              rows={Math.min(20, Math.max(6, text.split('\n').length + 1))}
             />
           ) : (
             <p className="text-sm text-gray-200 whitespace-pre-wrap line-clamp-6">
