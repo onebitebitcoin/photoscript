@@ -305,7 +305,7 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
-                    name="aiMode"
+                    name={`aiMode-${block.id}`}
                     value="link"
                     checked={aiMode === 'link'}
                     onChange={(e) => setAiMode(e.target.value)}
@@ -316,7 +316,7 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
-                    name="aiMode"
+                    name={`aiMode-${block.id}`}
                     value="enhance"
                     checked={aiMode === 'enhance'}
                     onChange={(e) => setAiMode(e.target.value)}
@@ -327,7 +327,7 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
                 <label className="flex items-center gap-1 cursor-pointer">
                   <input
                     type="radio"
-                    name="aiMode"
+                    name={`aiMode-${block.id}`}
                     value="search"
                     checked={aiMode === 'search'}
                     onChange={(e) => setAiMode(e.target.value)}
