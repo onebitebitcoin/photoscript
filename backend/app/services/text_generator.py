@@ -172,7 +172,7 @@ def build_link_prompt(url_content: str, user_guide: str, context: Dict) -> str:
     parts.append("""[작성 지시]
 위 URL 참고 내용을 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
 - 입니다체(존댓말)로 작성
-- 1-3 문장의 간결한 블록 텍스트만 반환
+- 최소 3문장, 최대 5문장으로 작성
 - 다른 설명 없이 스크립트 내용만 출력
 - 출처나 URL은 포함하지 말 것""")
 
@@ -194,7 +194,7 @@ def build_enhance_prompt(user_guide: str, context: Dict) -> str:
     parts.append("""[작성 지시]
 위 사용자 요청을 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
 - 입니다체(존댓말)로 작성
-- 1-3 문장의 간결한 블록 텍스트만 반환
+- 최소 3문장, 최대 5문장으로 작성
 - 다른 설명 없이 스크립트 내용만 출력""")
 
     return "\n".join(parts)
@@ -218,7 +218,7 @@ def build_search_prompt(search_query: str, user_guide: str, context: Dict) -> st
     parts.append("""[작성 지시]
 위 검색 키워드로 웹 검색한 결과를 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
 - 입니다체(존댓말)로 작성
-- 1-3 문장의 간결한 블록 텍스트만 반환
+- 최소 3문장, 최대 5문장으로 작성
 - 다른 설명 없이 스크립트 내용만 출력
 - 출처나 URL은 포함하지 말 것""")
 
