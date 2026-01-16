@@ -7,7 +7,7 @@ URL이나 지시문을 기반으로 LLM이 블록용 텍스트를 생성
 import re
 import httpx
 from enum import Enum
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 from app.config import get_settings
@@ -144,27 +144,18 @@ def build_enhance_prompt(user_guide: str, context: Dict) -> str:
     return "\n".join(parts)
 
 
-def build_search_prompt(search_results: List[Dict], user_guide: str, context: Dict, search_source: str = "duckduckgo") -> str:
-    """검색 모드 프롬프트 생성"""
-    parts = ["웹 검색 결과를 바탕으로 영상 스크립트 블록 텍스트를 작성해주세요.\n"]
+def build_search_prompt(search_query: str, user_guide: str, context: Dict) -> str:
+    """검색 모드 프롬프트 생성 (OpenAI web_search 도구 사용)"""
+    parts = [f'"{search_query}"에 대해 웹 검색하여 영상 스크립트 블록 텍스트를 작성해주세요.\n']
 
     if context["above"]:
         parts.append(f"[이전 블록 내용]\n{context['above']}\n")
-
-    parts.append("[검색 결과]")
-    for i, result in enumerate(search_results, 1):
-        parts.append(f"{i}. {result['title']}")
-        parts.append(f"   {result['snippet']}\n")
 
     if user_guide:
         parts.append(f"[사용자 요청]\n{user_guide}\n")
 
     if context["below"]:
         parts.append(f"[다음 블록 내용]\n{context['below']}\n")
-
-    # Fallback 사용 시 출처 명시 지시
-    if search_source == "duckduckgo-instant-answer":
-        parts.append("\n[중요] 텍스트 마지막에 반드시 다음을 추가: (검색: DuckDuckGo Instant Answer API)")
 
     return "\n".join(parts)
 
@@ -217,24 +208,44 @@ async def generate_block_text(
         user_instruction = build_enhance_prompt(user_guide, context)
 
     elif mode == TextGenerationMode.SEARCH:
-        from app.services.web_search import search_web, WebSearchError
+        # OpenAI web_search 도구를 사용하여 검색 + 텍스트 생성
+        user_instruction = build_search_prompt(prompt, user_guide or "", context)
+
+        # SEARCH 모드는 web_search 도구와 함께 별도로 호출
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+
+        search_system_prompt = """당신은 영상 스크립트 작성 전문가입니다.
+웹 검색을 통해 최신 정보를 찾아 영상 스크립트의 한 블록에 들어갈 텍스트를 작성합니다.
+
+규칙:
+1. 간결하고 명확한 문장으로 작성
+2. 영상 나레이션에 적합한 톤
+3. 1-3 문장 정도의 짧은 블록 텍스트
+4. 시각적 설명이 가능한 내용 포함
+5. 이전/다음 블록과 자연스럽게 연결
+6. 다른 설명 없이 블록 텍스트만 반환"""
 
         try:
-            search_data = await search_web(prompt, max_results=5)
-        except WebSearchError as e:
-            raise TextGenerationError(str(e))
+            logger.debug("OpenAI API 호출 시작 (web_search 모드)")
+            logger.debug(f"Search query: {prompt}")
 
-        if not search_data.get("results"):
-            raise TextGenerationError("검색 결과가 없습니다.")
+            response = await client.responses.create(
+                model="gpt-5-mini",
+                tools=[{"type": "web_search"}],
+                input=[
+                    {"role": "system", "content": search_system_prompt},
+                    {"role": "user", "content": user_instruction}
+                ]
+            )
 
-        # 검색 출처 저장
-        search_source = search_data.get("source", "unknown")
-        user_instruction = build_search_prompt(
-            search_data["results"],
-            user_guide or "",
-            context,
-            search_source
-        )
+            generated_text = response.output_text.strip()
+            logger.info(f"텍스트 생성 완료 (web_search): {len(generated_text)}자")
+
+            return generated_text
+
+        except Exception as e:
+            logger.error(f"텍스트 생성 실패 (web_search): error={str(e)}")
+            raise TextGenerationError(f"웹 검색 텍스트 생성 실패: {str(e)}")
 
     else:
         raise TextGenerationError(f"지원하지 않는 모드: {mode}")
