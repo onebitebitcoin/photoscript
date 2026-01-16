@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Edit2, Search, Check, X, ChevronDown, ChevronUp, Loader2, Image, Video, Play, Eye, Trash2, Sparkles, Link, Globe, MessageSquare } from 'lucide-react'
-import KeywordEditor from './KeywordEditor'
 import { blockApi } from '../../services/api'
 import toast from 'react-hot-toast'
 
@@ -78,7 +77,6 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
   const [isEditing, setIsEditing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
   const [text, setText] = useState(block.text)
-  const [keywords, setKeywords] = useState(block.keywords || [])
   const [isSaving, setIsSaving] = useState(false)
   const [assets, setAssets] = useState([])
   const [isLoadingAssets, setIsLoadingAssets] = useState(false)
@@ -105,7 +103,7 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      await onUpdate(block.id, { text, keywords })
+      await onUpdate(block.id, { text })
       setIsEditing(false)
     } catch (error) {
       console.error('Failed to save block:', error)
@@ -116,7 +114,6 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
 
   const handleCancel = () => {
     setText(block.text)
-    setKeywords(block.keywords || [])
     setIsEditing(false)
   }
 
@@ -376,19 +373,6 @@ function EditableBlockCard({ block, isSelected, isNew, onSelect, onUpdate, onBlo
             <p className="text-sm text-gray-200 whitespace-pre-wrap">
               {renderTextWithLinks(block.text)}
             </p>
-          )}
-
-          {/* 키워드 (편집 모드에서만) */}
-          {isEditing && (
-            <div>
-              <p className="text-xs text-gray-500 mb-1.5">Keywords</p>
-              <KeywordEditor
-                keywords={keywords}
-                onChange={setKeywords}
-                editable={true}
-                maxKeywords={10}
-              />
-            </div>
           )}
 
           {/* 에셋 미리보기 */}
