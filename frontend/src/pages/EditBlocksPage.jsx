@@ -186,12 +186,21 @@ function EditBlocksPage() {
       // 선택 목록에서 제거
       setSelectedIds(prev => prev.filter(id => id !== blockId))
 
-      // 블록 목록 새로고침
-      await loadProject()
+      // Optimistic Update: 전체 로드 대신 직접 블록 제거
+      setBlocks(prev => {
+        const newBlocks = prev.filter(b => b.id !== blockId)
+        // index 재정렬
+        return newBlocks.map((block, idx) => ({
+          ...block,
+          index: idx
+        }))
+      })
 
       logger.info('Block deleted', { blockId })
       toast.success('블록이 삭제되었습니다')
     } catch (err) {
+      // 에러 시 전체 새로고침으로 복구
+      await loadProject()
       const message = err.response?.data?.detail?.message || err.message
       setError(message)
       logger.error('Failed to delete block', { error: message })
