@@ -113,18 +113,24 @@ async def get_block_context(block_id: str, db: Session) -> Dict[str, Optional[st
 
 def build_link_prompt(url_content: str, user_guide: str, context: Dict) -> str:
     """링크 모드 프롬프트 생성"""
-    parts = ["다음 URL의 내용을 기반으로 영상 스크립트 블록에 적합한 텍스트를 작성해주세요.\n"]
+    parts = []
 
     if context["above"]:
-        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
-
-    parts.append(f"[URL 내용]\n{url_content}\n")
+        parts.append(f"[이전 블록]\n{context['above']}\n")
 
     if context["below"]:
-        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+        parts.append(f"[다음 블록]\n{context['below']}\n")
+
+    parts.append(f"[URL에서 가져온 참고 내용]\n{url_content}\n")
 
     if user_guide:
-        parts.append(f"[사용자 가이드]\n{user_guide}")
+        parts.append(f"[사용자 요청]\n{user_guide}\n")
+
+    parts.append("""[작성 지시]
+위 URL 참고 내용을 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
+- 입니다체(존댓말)로 작성
+- 1-3 문장의 간결한 블록 텍스트만 반환
+- 다른 설명 없이 스크립트 내용만 출력""")
 
     return "\n".join(parts)
 
@@ -152,16 +158,24 @@ def build_enhance_prompt(user_guide: str, context: Dict) -> str:
 
 def build_search_prompt(search_query: str, user_guide: str, context: Dict) -> str:
     """검색 모드 프롬프트 생성 (OpenAI web_search 도구 사용)"""
-    parts = [f'"{search_query}"에 대해 웹 검색하여 영상 스크립트 블록 텍스트를 작성해주세요.\n']
+    parts = []
 
     if context["above"]:
-        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
+        parts.append(f"[이전 블록]\n{context['above']}\n")
+
+    if context["below"]:
+        parts.append(f"[다음 블록]\n{context['below']}\n")
+
+    parts.append(f"[검색 키워드]\n{search_query}\n")
 
     if user_guide:
         parts.append(f"[사용자 요청]\n{user_guide}\n")
 
-    if context["below"]:
-        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+    parts.append("""[작성 지시]
+위 검색 키워드로 웹 검색한 결과를 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
+- 입니다체(존댓말)로 작성
+- 1-3 문장의 간결한 블록 텍스트만 반환
+- 다른 설명 없이 스크립트 내용만 출력""")
 
     return "\n".join(parts)
 
