@@ -203,9 +203,11 @@ async def generate_block_text(
         user_instruction = build_link_prompt(url_content, user_guide or "", context)
 
     elif mode == TextGenerationMode.ENHANCE:
-        if not user_guide:
+        # ENHANCE 모드에서는 prompt가 가이드 역할 (프론트엔드 호환)
+        guide = user_guide or prompt
+        if not guide:
             raise TextGenerationError("보완 모드에서는 가이드를 입력해야 합니다.")
-        user_instruction = build_enhance_prompt(user_guide, context)
+        user_instruction = build_enhance_prompt(guide, context)
 
     elif mode == TextGenerationMode.SEARCH:
         # OpenAI web_search 도구를 사용하여 검색 + 텍스트 생성
