@@ -147,8 +147,17 @@ function EditBlocksPage() {
         insert_at: insertAt
       })
 
-      // 블록 목록 새로고침
-      await loadProject()
+      // Optimistic Update: 전체 로드 대신 직접 블록 추가
+      setBlocks(prev => {
+        const newBlocks = [...prev]
+        // insertAt 위치에 새 블록 삽입
+        newBlocks.splice(insertAt, 0, newBlock)
+        // index 재정렬
+        return newBlocks.map((block, idx) => ({
+          ...block,
+          index: idx
+        }))
+      })
 
       // 새 블록 ID 저장 (자동 편집 모드)
       setNewBlockId(newBlock.id)
@@ -156,6 +165,8 @@ function EditBlocksPage() {
       logger.info('Block added', { blockId: newBlock.id, insertAt })
       toast.success('새 블록이 추가되었습니다')
     } catch (err) {
+      // 에러 시 전체 새로고침으로 복구
+      await loadProject()
       const message = err.response?.data?.detail?.message || err.message
       setError(message)
       logger.error('Failed to add block', { error: message })
