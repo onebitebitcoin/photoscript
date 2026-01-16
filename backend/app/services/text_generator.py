@@ -131,15 +131,21 @@ def build_link_prompt(url_content: str, user_guide: str, context: Dict) -> str:
 
 def build_enhance_prompt(user_guide: str, context: Dict) -> str:
     """보완 모드 프롬프트 생성"""
-    parts = ["위/아래 블록 내용을 참고하여 논리적 흐름을 보완하는 텍스트를 작성해주세요.\n"]
+    parts = []
 
     if context["above"]:
-        parts.append(f"[이전 블록 내용]\n{context['above']}\n")
+        parts.append(f"[이전 블록]\n{context['above']}\n")
+
+    if context["below"]:
+        parts.append(f"[다음 블록]\n{context['below']}\n")
 
     parts.append(f"[사용자 요청]\n{user_guide}\n")
 
-    if context["below"]:
-        parts.append(f"[다음 블록 내용]\n{context['below']}\n")
+    parts.append("""[작성 지시]
+위 사용자 요청을 바탕으로, 이전 블록과 다음 블록의 내용과 자연스럽게 이어지는 스크립트를 작성해주세요.
+- 입니다체(존댓말)로 작성
+- 1-3 문장의 간결한 블록 텍스트만 반환
+- 다른 설명 없이 스크립트 내용만 출력""")
 
     return "\n".join(parts)
 
@@ -217,15 +223,14 @@ async def generate_block_text(
         client = AsyncOpenAI(api_key=settings.openai_api_key)
 
         search_system_prompt = """당신은 영상 스크립트 작성 전문가입니다.
-웹 검색을 통해 최신 정보를 찾아 영상 스크립트의 한 블록에 들어갈 텍스트를 작성합니다.
+웹 검색을 통해 최신 정보를 찾아, 이전/다음 블록과 자연스럽게 이어지는 영상 스크립트를 작성합니다.
 
 규칙:
-1. 간결하고 명확한 문장으로 작성
-2. 영상 나레이션에 적합한 톤
-3. 1-3 문장 정도의 짧은 블록 텍스트
-4. 시각적 설명이 가능한 내용 포함
-5. 이전/다음 블록과 자연스럽게 연결
-6. 다른 설명 없이 블록 텍스트만 반환"""
+1. 입니다체(존댓말)로 작성
+2. 간결하고 명확한 1-3 문장
+3. 영상 나레이션에 적합한 톤
+4. 이전/다음 블록과 논리적 흐름 유지
+5. 다른 설명 없이 스크립트 텍스트만 반환"""
 
         try:
             logger.debug("OpenAI API 호출 시작 (web_search 모드)")
@@ -256,15 +261,14 @@ async def generate_block_text(
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     system_prompt = """당신은 영상 스크립트 작성 전문가입니다.
-사용자의 요청에 따라 영상 스크립트의 한 블록에 들어갈 텍스트를 작성합니다.
+사용자의 요청을 바탕으로 이전/다음 블록과 자연스럽게 이어지는 영상 스크립트를 작성합니다.
 
 규칙:
-1. 간결하고 명확한 문장으로 작성
-2. 영상 나레이션에 적합한 톤
-3. 1-3 문장 정도의 짧은 블록 텍스트
-4. 시각적 설명이 가능한 내용 포함
-5. 이전/다음 블록과 자연스럽게 연결
-6. 다른 설명 없이 블록 텍스트만 반환"""
+1. 입니다체(존댓말)로 작성
+2. 간결하고 명확한 1-3 문장
+3. 영상 나레이션에 적합한 톤
+4. 이전/다음 블록과 논리적 흐름 유지
+5. 다른 설명 없이 스크립트 텍스트만 반환"""
 
     try:
         logger.debug("OpenAI API 호출 시작")
