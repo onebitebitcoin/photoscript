@@ -32,5 +32,5 @@ def get_db():
 
 def init_db():
     """데이터베이스 테이블 생성"""
-    from app.models import project, block, asset, block_asset
+    from app.models import project, block, asset, block_asset  # noqa: F401
     Base.metadata.create_all(bind=engine)

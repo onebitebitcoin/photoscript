@@ -4,7 +4,7 @@ AssetService 단위 테스트
 
 import pytest
 from app.services.asset_service import AssetService
-from app.models import Asset, Block, Project, BlockAsset
+from app.models import Block, Project, BlockAsset
 from app.models.block import BlockStatus
 from app.models.block_asset import ChosenBy
 from app.errors import AssetSaveError, AssetNotFoundError
@@ -110,8 +110,8 @@ class TestSaveAndLinkAssets:
         )
 
         assert len(block_assets) == 2
-        assert block_assets[0].is_primary == True  # 첫 번째가 대표
-        assert block_assets[1].is_primary == False
+        assert block_assets[0].is_primary is True  # 첫 번째가 대표
+        assert block_assets[1].is_primary is False
 
     def test_clear_existing_assets(self, db_session, asset_service, project_with_block):
         """기존 에셋 삭제 후 새로 연결"""
@@ -137,7 +137,7 @@ class TestSaveAndLinkAssets:
                 "thumbnail_url": "https://example.com/new_thumb.jpg"
             }
         ]
-        block_assets = asset_service.save_and_link_assets(
+        asset_service.save_and_link_assets(
             db_session, block.id, new_assets, clear_existing=True
         )
 
@@ -203,7 +203,7 @@ class TestSetPrimaryAsset:
         second_asset_id = block_assets[1].asset_id
         result = asset_service.set_primary_asset(db_session, block.id, second_asset_id)
 
-        assert result.is_primary == True
+        assert result.is_primary is True
         assert result.chosen_by == ChosenBy.USER
 
         # 첫 번째 에셋은 대표 해제
@@ -211,7 +211,7 @@ class TestSetPrimaryAsset:
             BlockAsset.block_id == block.id,
             BlockAsset.asset_id == block_assets[0].asset_id
         ).first()
-        assert first_ba.is_primary == False
+        assert first_ba.is_primary is False
 
     def test_set_primary_asset_not_found(self, db_session, asset_service, project_with_block):
         """없는 에셋을 대표로 설정 시 에러"""

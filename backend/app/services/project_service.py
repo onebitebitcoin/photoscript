@@ -10,12 +10,12 @@ Unix 철학 원칙 적용:
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from app.models import Project, Block, Asset, BlockAsset
+from app.models import Project, Block
 from app.models.block import BlockStatus
 from app.services.asset_service import AssetService
 from app.services.pexels_client import PexelsClient
 from app.services.matcher import match_assets_for_block
-from app.services import process_script, ScriptProcessingError
+from app.services import process_script
 from app.errors import ProjectNotFoundError
 from app.utils.logger import logger
 
@@ -248,7 +248,7 @@ class ProjectService:
         Returns:
             int: 매칭 성공한 블록 수
         """
-        project = self.get_project(db, project_id)
+        self.get_project(db, project_id)
 
         # 블록 조회
         blocks = db.query(Block).filter(

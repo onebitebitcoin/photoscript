@@ -5,7 +5,6 @@ from typing import List
 from app.database import get_db
 from app.models import Project, Block, Asset, BlockAsset
 from app.models.block import BlockStatus
-from app.models.block_asset import ChosenBy
 from app.schemas import (
     ProjectCreate,
     ProjectResponse,
@@ -112,7 +111,7 @@ async def get_project(
         # 대표 에셋 조회
         primary_ba = db.query(BlockAsset).filter(
             BlockAsset.block_id == block.id,
-            BlockAsset.is_primary == True
+            BlockAsset.is_primary.is_(True)
         ).first()
 
         primary_asset = None

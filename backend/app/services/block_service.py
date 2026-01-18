@@ -10,10 +10,10 @@ Unix 철학 원칙 적용:
 from typing import List, Optional, Tuple
 from sqlalchemy.orm import Session
 
-from app.models import Block, Project
+from app.models import Block
 from app.models.block import BlockStatus
 from app.services.asset_service import AssetService
-from app.errors import BlockNotFoundError, BlockValidationError, BlockMergeError, BlockSplitError
+from app.errors import BlockNotFoundError, BlockMergeError, BlockSplitError
 from app.utils.logger import logger
 
 

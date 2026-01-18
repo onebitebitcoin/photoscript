@@ -6,13 +6,6 @@ Unix 철학 원칙 적용:
 - 원칙 4 (분리): Router(인터페이스) / Service(정책) / Model(엔진)
 """
 
-from functools import lru_cache
-from sqlalchemy.orm import Session
-
-from app.database import get_db
-from app.config import get_settings
-
-
 # =============================================================================
 # 서비스 의존성
 # =============================================================================

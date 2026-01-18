@@ -10,9 +10,6 @@ Projects API 통합 테스트
 - POST /projects/{id}/blocks/merge - 블록 합치기
 """
 
-import pytest
-
-
 class TestProjectsList:
     """프로젝트 목록 조회 테스트"""
 

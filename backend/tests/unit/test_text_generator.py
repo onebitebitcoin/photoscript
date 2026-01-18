@@ -7,7 +7,6 @@ text_generator.py 유닛 테스트
 - is_url(): URL 유효성 검사
 """
 
-import pytest
 from app.services.text_generator import (
     detect_mode,
     remove_source_references,

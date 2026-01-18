@@ -229,7 +229,7 @@ class AssetService:
         # 기존 대표 해제
         db.query(BlockAsset).filter(
             BlockAsset.block_id == block_id,
-            BlockAsset.is_primary == True
+            BlockAsset.is_primary.is_(True)
         ).update({"is_primary": False, "chosen_by": ChosenBy.AUTO})
 
         # 새 대표 설정

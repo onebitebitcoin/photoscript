@@ -5,7 +5,6 @@ from typing import List
 from app.database import get_db
 from app.models import Block, Asset, BlockAsset
 from app.models.block import BlockStatus
-from app.models.block_asset import ChosenBy
 from app.schemas import BlockResponse, SetPrimaryRequest, BlockAssetResponse, BlockUpdate, BlockSplitRequest, MatchOptions, BlockSearchRequest, KeywordExtractRequest, GenerateTextRequest, GenerateTextResponse, GenerationInfo
 from app.services import extract_keywords, KeywordExtractionError, generate_block_text_auto, TextGenerationError
 from app.services.matcher import match_assets_for_block

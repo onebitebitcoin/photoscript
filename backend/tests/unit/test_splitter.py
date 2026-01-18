@@ -1,4 +1,3 @@
-import pytest
 from app.services.splitter import split_script, split_into_sentences
 
 
