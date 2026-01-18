@@ -39,7 +39,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 
 # Copy frontend build output (static files)
-COPY --from=frontend-builder /app/frontend/dist ./static/
+# main.py에서 backend/static/ 경로를 참조하므로 해당 위치에 복사
+COPY --from=frontend-builder /app/frontend/dist ./backend/static/
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1

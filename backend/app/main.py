@@ -57,18 +57,32 @@ async def health_check():
     return {"status": "healthy", "service": "PhotoScript"}
 
 
-@app.get("/")
-async def root():
-    """루트 엔드포인트"""
-    return {
-        "message": "PhotoScript API",
-        "docs": "/docs",
-        "health": "/health"
-    }
-
-
 # 프로덕션에서 정적 파일 서빙 (Frontend 빌드 결과물)
+# 주의: StaticFiles 마운트는 @app.get("/") 보다 먼저 설정해야 프론트엔드가 서빙됨
 if settings.environment == "production":
     static_path = os.path.join(os.path.dirname(__file__), "..", "static")
+    logger.info(f"Static path: {static_path}, exists: {os.path.exists(static_path)}")
     if os.path.exists(static_path):
         app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+        logger.info("Frontend static files mounted at /")
+    else:
+        logger.warning(f"Static path not found: {static_path}")
+        # 정적 파일이 없을 때만 API 응답
+        @app.get("/")
+        async def root():
+            """루트 엔드포인트 (정적 파일 없을 때)"""
+            return {
+                "message": "PhotoScript API",
+                "docs": "/docs",
+                "health": "/health"
+            }
+else:
+    # 개발 환경에서는 API 응답
+    @app.get("/")
+    async def root():
+        """루트 엔드포인트"""
+        return {
+            "message": "PhotoScript API",
+            "docs": "/docs",
+            "health": "/health"
+        }
