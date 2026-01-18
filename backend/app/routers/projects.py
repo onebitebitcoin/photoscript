@@ -3,7 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models import Project, Block, Asset, BlockAsset
+from app.models.user import User
 from app.models.block import BlockStatus
 from app.schemas import (
     ProjectCreate,
@@ -37,12 +39,13 @@ project_service = ProjectService()
 
 @router.get("", response_model=List[ProjectResponse])
 async def list_projects(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """프로젝트 목록 조회 (최신순)"""
-    logger.info("프로젝트 목록 조회")
+    """프로젝트 목록 조회 (최신순, 로그인한 사용자 소유만)"""
+    logger.info(f"프로젝트 목록 조회: user_id={current_user.id}")
 
-    projects = project_service.get_projects(db)
+    projects = project_service.get_projects(db, current_user.id)
 
     logger.info(f"프로젝트 목록 조회 완료: {len(projects)}개")
     return projects
@@ -51,13 +54,14 @@ async def list_projects(
 @router.delete("/{project_id}")
 async def delete_project(
     project_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """프로젝트 삭제"""
-    logger.info(f"프로젝트 삭제 요청: id={project_id}")
+    """프로젝트 삭제 (본인 소유만)"""
+    logger.info(f"프로젝트 삭제 요청: id={project_id}, user_id={current_user.id}")
 
     try:
-        project_service.delete_project(db, project_id)
+        project_service.delete_project(db, project_id, current_user.id)
     except ProjectNotFoundError as e:
         raise HTTPException(status_code=404, detail={"message": e.message})
 
@@ -68,10 +72,11 @@ async def delete_project(
 @router.post("", response_model=ProjectResponse)
 async def create_project(
     request: ProjectCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """프로젝트 생성 (스크립트 저장)"""
-    logger.info(f"프로젝트 생성 요청: title={request.title}, script_length={len(request.script_raw)}")
+    logger.info(f"프로젝트 생성 요청: title={request.title}, user_id={current_user.id}")
 
     # 스크립트 길이 검증
     if len(request.script_raw) > settings.max_script_length:
@@ -85,6 +90,7 @@ async def create_project(
 
     project = project_service.create_project(
         db,
+        user_id=current_user.id,
         title=request.title,
         script_raw=request.script_raw
     )
@@ -96,12 +102,16 @@ async def create_project(
 @router.get("/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     project_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """프로젝트 상세 조회 (블록 + 대표 에셋 포함)"""
-    logger.info(f"프로젝트 조회: id={project_id}")
+    """프로젝트 상세 조회 (블록 + 대표 에셋 포함, 본인 소유만)"""
+    logger.info(f"프로젝트 조회: id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -148,12 +158,16 @@ async def get_project(
 async def generate_visuals(
     project_id: str,
     options: GenerateOptions = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """LLM으로 의미론적 블록 분할 + 키워드 추출 + 에셋 매칭 실행"""
-    logger.info(f"Generate 시작: project_id={project_id}")
+    logger.info(f"Generate 시작: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -245,12 +259,16 @@ async def generate_visuals(
 @router.get("/{project_id}/blocks", response_model=List[BlockResponse])
 async def get_project_blocks(
     project_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """프로젝트의 모든 블록 조회"""
-    logger.info(f"블록 목록 조회: project_id={project_id}")
+    """프로젝트의 모든 블록 조회 (본인 소유만)"""
+    logger.info(f"블록 목록 조회: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -261,12 +279,16 @@ async def get_project_blocks(
 async def split_script(
     project_id: str,
     options: SplitOptions = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """스크립트를 LLM으로 의미론적 분할 + 키워드 추출 (에셋 매칭 없이)"""
-    logger.info(f"Split 시작: project_id={project_id}")
+    logger.info(f"Split 시작: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -335,12 +357,16 @@ async def split_script(
 async def match_assets(
     project_id: str,
     options: MatchOptions = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """편집된 블록들에 대해 에셋 매칭 실행 (영상 우선)"""
-    logger.info(f"Match 시작: project_id={project_id}")
+    logger.info(f"Match 시작: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -414,12 +440,16 @@ async def match_assets(
 async def merge_blocks(
     project_id: str,
     request: BlockMergeRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """여러 블록을 하나로 합치기"""
-    logger.info(f"블록 합치기: project_id={project_id}, block_ids={request.block_ids}")
+    """여러 블록을 하나로 합치기 (본인 소유만)"""
+    logger.info(f"블록 합치기: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
@@ -436,12 +466,16 @@ async def merge_blocks(
 async def create_block(
     project_id: str,
     request: BlockCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    """새 블록 추가"""
-    logger.info(f"블록 추가: project_id={project_id}, insert_at={request.insert_at}")
+    """새 블록 추가 (본인 소유만)"""
+    logger.info(f"블록 추가: project_id={project_id}, user_id={current_user.id}")
 
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 

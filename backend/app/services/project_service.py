@@ -30,21 +30,31 @@ class ProjectService:
     # 조회
     # ==========================================================================
 
-    def get_project(self, db: Session, project_id: str) -> Project:
+    def get_project(self, db: Session, project_id: str, user_id: str = None) -> Project:
         """
         프로젝트 조회
+
+        Args:
+            db: DB 세션
+            project_id: 프로젝트 ID
+            user_id: 사용자 ID (지정하면 해당 사용자 소유 프로젝트만 조회)
 
         Raises:
             ProjectNotFoundError: 프로젝트를 찾을 수 없을 때
         """
-        project = db.query(Project).filter(Project.id == project_id).first()
+        query = db.query(Project).filter(Project.id == project_id)
+        if user_id:
+            query = query.filter(Project.user_id == user_id)
+        project = query.first()
         if not project:
             raise ProjectNotFoundError("프로젝트를 찾을 수 없습니다", {"project_id": project_id})
         return project
 
-    def get_projects(self, db: Session) -> List[Project]:
-        """프로젝트 목록 조회 (최신순)"""
-        return db.query(Project).order_by(Project.created_at.desc()).all()
+    def get_projects(self, db: Session, user_id: str) -> List[Project]:
+        """프로젝트 목록 조회 (최신순, 사용자별)"""
+        return db.query(Project).filter(
+            Project.user_id == user_id
+        ).order_by(Project.created_at.desc()).all()
 
     # ==========================================================================
     # 생성/삭제
@@ -53,11 +63,13 @@ class ProjectService:
     def create_project(
         self,
         db: Session,
+        user_id: str,
         title: Optional[str],
         script_raw: str
     ) -> Project:
         """프로젝트 생성"""
         project = Project(
+            user_id=user_id,
             title=title,
             script_raw=script_raw
         )
@@ -65,16 +77,16 @@ class ProjectService:
         db.commit()
         db.refresh(project)
 
-        logger.info(f"프로젝트 생성: id={project.id}")
+        logger.info(f"프로젝트 생성: id={project.id}, user_id={user_id}")
         return project
 
-    def delete_project(self, db: Session, project_id: str) -> None:
+    def delete_project(self, db: Session, project_id: str, user_id: str) -> None:
         """
         프로젝트 삭제
 
         관련된 블록, 에셋 연결도 모두 삭제
         """
-        project = self.get_project(db, project_id)
+        project = self.get_project(db, project_id, user_id)
 
         # 연관된 블록-에셋 연결 삭제
         blocks = db.query(Block).filter(Block.project_id == project_id).all()

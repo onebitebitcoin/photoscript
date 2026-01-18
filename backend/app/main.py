@@ -12,6 +12,18 @@ from app.routers import projects, blocks, auth
 settings = get_settings()
 
 
+def run_migrations():
+    """마이그레이션 실행"""
+    try:
+        from migrations.m001_add_user_id_to_projects import run_migration, run_migration_sqlite
+        if "sqlite" in settings.database_url:
+            run_migration_sqlite()
+        else:
+            run_migration()
+    except Exception as e:
+        logger.warning(f"마이그레이션 실행 중 오류 (무시됨): {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """앱 시작/종료 시 실행되는 로직"""
@@ -21,6 +33,9 @@ async def lifespan(app: FastAPI):
     # 데이터베이스 초기화
     init_db()
     logger.info("데이터베이스 초기화 완료")
+
+    # 마이그레이션 실행
+    run_migrations()
 
     yield
 
