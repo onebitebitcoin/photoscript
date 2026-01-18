@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useState, useRef } from 'react'
 import { Loader2, Check, Play, Eye, Video, Image, Search } from 'lucide-react'
 import { STYLES } from '../../constants/styles'
 
@@ -93,15 +93,19 @@ function BlockAssetSection({
   const [showCount, setShowCount] = useState(4)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [isSearching, setIsSearching] = useState(false)
+  const isSearchingRef = useRef(false)
 
   const handleSearch = async () => {
-    if (!searchKeyword.trim()) return
+    // 상태와 ref 둘 다 체크하여 중복 호출 방지
+    if (!searchKeyword.trim() || isSearching || isSearchingRef.current) return
+    isSearchingRef.current = true
     setIsSearching(true)
     try {
       await onKeywordSearch(searchKeyword.trim())
       setSearchKeyword('')
       setShowCount(4)
     } finally {
+      isSearchingRef.current = false
       setIsSearching(false)
     }
   }
