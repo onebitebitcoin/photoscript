@@ -7,7 +7,7 @@ import os
 from app.config import get_settings
 from app.database import init_db
 from app.utils.logger import logger
-from app.routers import projects, blocks
+from app.routers import projects, blocks, auth
 
 settings = get_settings()
 
@@ -47,6 +47,7 @@ app.add_middleware(
 )
 
 # API 라우터 등록
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(projects.router, prefix="/api/v1/projects", tags=["Projects"])
 app.include_router(blocks.router, prefix="/api/v1/blocks", tags=["Blocks"])
 

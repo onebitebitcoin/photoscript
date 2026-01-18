@@ -6,11 +6,26 @@ const api = axios.create({
   timeout: 300000, // LLM + Pexels 매칭 시간 고려 (5분)
 })
 
-// Trailing slash 제거 인터셉터
+// 토큰 저장/조회/삭제
+const TOKEN_KEY = 'auth_token'
+
+export const getStoredToken = () => localStorage.getItem(TOKEN_KEY)
+export const setStoredToken = (token) => localStorage.setItem(TOKEN_KEY, token)
+export const removeStoredToken = () => localStorage.removeItem(TOKEN_KEY)
+
+// Trailing slash 제거 및 토큰 인터셉터
 api.interceptors.request.use((config) => {
+  // Trailing slash 제거
   if (config.url && config.url.endsWith('/')) {
     config.url = config.url.slice(0, -1)
   }
+
+  // 토큰이 있으면 Authorization 헤더 추가
+  const token = getStoredToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+
   logger.debug(`API Request: ${config.method?.toUpperCase()} ${config.url}`, config.data)
   return config
 })
@@ -24,9 +39,43 @@ api.interceptors.response.use(
   (error) => {
     const errorData = error.response?.data || { message: error.message }
     logger.error(`API Error: ${error.response?.status}`, errorData)
+
+    // 401 에러 시 토큰 삭제
+    if (error.response?.status === 401) {
+      removeStoredToken()
+    }
+
     return Promise.reject(error)
   }
 )
+
+/**
+ * Auth API
+ */
+export const authApi = {
+  /**
+   * 회원가입
+   * @param {Object} data - { nickname, password }
+   */
+  register: (data) => api.post('/auth/register', data),
+
+  /**
+   * 로그인
+   * @param {Object} data - { nickname, password }
+   */
+  login: (data) => api.post('/auth/login', data),
+
+  /**
+   * 닉네임 중복체크
+   * @param {string} nickname
+   */
+  checkNickname: (nickname) => api.post('/auth/check-nickname', { nickname }),
+
+  /**
+   * 현재 사용자 정보 조회
+   */
+  getMe: () => api.get('/auth/me'),
+}
 
 /**
  * Project API

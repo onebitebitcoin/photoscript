@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import { AuthProvider } from './contexts/AuthContext'
 import App from './App.jsx'
 import './index.css'
 
@@ -14,8 +15,9 @@ if (import.meta.env.DEV) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
-      <App />
-      <Toaster
+      <AuthProvider>
+        <App />
+        <Toaster
         position="top-right"
         toastOptions={{
           style: {
@@ -37,6 +39,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           },
         }}
       />
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 )

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Loader2, ChevronRight } from 'lucide-react'
+import { Plus, FileText, Trash2, Loader2, ChevronRight, LogOut } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import ScriptEditor from '../components/script/ScriptEditor'
@@ -8,10 +8,12 @@ import Button from '../components/common/Button'
 import { LoadingOverlay } from '../components/common/Loading'
 import ErrorAlert from '../components/common/ErrorAlert'
 import { projectApi } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import logger from '../utils/logger'
 
 function HomePage() {
   const navigate = useNavigate()
+  const { user, logout } = useAuth()
   const [projects, setProjects] = useState([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(true)
   const [showNewScript, setShowNewScript] = useState(false)
@@ -149,14 +151,31 @@ function HomePage() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-white">PhotoScript</h1>
-          <Button
-            onClick={() => setShowNewScript(!showNewScript)}
-            icon={showNewScript ? null : Plus}
-            variant={showNewScript ? 'outline' : 'primary'}
-          >
-            {showNewScript ? '취소' : '새 스크립트'}
-          </Button>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-white">PhotoScript</h1>
+            {user && (
+              <span className="text-sm text-gray-400">{user.nickname}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setShowNewScript(!showNewScript)}
+              icon={showNewScript ? null : Plus}
+              variant={showNewScript ? 'outline' : 'primary'}
+            >
+              {showNewScript ? '취소' : '새 스크립트'}
+            </Button>
+            <button
+              onClick={() => {
+                logout()
+                navigate('/login')
+              }}
+              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors"
+              title="로그아웃"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* 에러 표시 */}
