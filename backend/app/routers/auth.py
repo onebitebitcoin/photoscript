@@ -61,11 +61,26 @@ async def login(
     """로그인"""
     logger.info(f"Login attempt: {request.nickname}")
 
-    user = auth_service.authenticate_user(db, request.nickname, request.password)
+    # 먼저 사용자 존재 여부 확인
+    user = auth_service.get_user_by_nickname(db, request.nickname)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"message": "닉네임 또는 비밀번호가 올바르지 않습니다", "error": "invalid_credentials"}
+            detail={"message": "존재하지 않는 사용자입니다", "error": "user_not_found"}
+        )
+
+    # 비밀번호 확인
+    if not auth_service.verify_password(request.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "비밀번호가 올바르지 않습니다", "error": "invalid_password"}
+        )
+
+    # 계정 활성화 여부 확인
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"message": "비활성화된 계정입니다", "error": "inactive_user"}
         )
 
     # 토큰 생성
