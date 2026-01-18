@@ -8,7 +8,14 @@ import logger from '../utils/logger'
 
 function RegisterPage() {
   const navigate = useNavigate()
-  const { register, checkNickname } = useAuth()
+  const { register, checkNickname, isAuthenticated, isLoading: authLoading } = useAuth()
+
+  // 이미 로그인된 경우 홈으로 리다이렉트
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [authLoading, isAuthenticated, navigate])
 
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')

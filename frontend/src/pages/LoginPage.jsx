@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -8,7 +8,14 @@ import logger from '../utils/logger'
 
 function LoginPage() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth()
+
+  // 이미 로그인된 경우 홈으로 리다이렉트
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/', { replace: true })
+    }
+  }, [authLoading, isAuthenticated, navigate])
 
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
