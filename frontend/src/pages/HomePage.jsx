@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Loader2, ChevronRight, LogOut } from 'lucide-react'
+import { Plus, FileText, Trash2, Loader2, ChevronRight, LogOut, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import ScriptEditor from '../components/script/ScriptEditor'
@@ -158,13 +158,17 @@ function HomePage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Button
+            <button
               onClick={() => setShowNewScript(!showNewScript)}
-              icon={showNewScript ? null : Plus}
-              variant={showNewScript ? 'outline' : 'primary'}
+              className={`p-2 rounded-lg transition-colors ${
+                showNewScript
+                  ? 'bg-dark-card text-gray-400 hover:text-white'
+                  : 'bg-primary text-white hover:bg-primary/90'
+              }`}
+              title={showNewScript ? '취소' : '새 스크립트'}
             >
-              {showNewScript ? '취소' : '새 스크립트'}
-            </Button>
+              {showNewScript ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            </button>
             <button
               onClick={() => {
                 logout()
