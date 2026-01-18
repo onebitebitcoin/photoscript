@@ -1,18 +1,29 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import Base, get_db
 
-# 테스트용 SQLite 인메모리 DB
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+# TEST_DATABASE_URL 환경 변수 지원 (Factor X: Dev/Prod Parity)
+# PostgreSQL로 테스트하려면: TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/test_db
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite:///./test.db")
 
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
+# SQLite vs PostgreSQL 설정
+if "sqlite" in TEST_DATABASE_URL:
+    engine = create_engine(
+        TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+else:
+    engine = create_engine(
+        TEST_DATABASE_URL,
+        pool_pre_ping=True,
+    )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

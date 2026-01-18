@@ -1,7 +1,12 @@
 from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings
+from pydantic import field_validator, model_validator
 from functools import lru_cache
+
+
+# 기본 SECRET_KEY (프로덕션에서 사용 금지)
+DEFAULT_SECRET_KEY = "your-secret-key-change-in-production"
 
 
 def find_env_file() -> Optional[str]:
@@ -26,7 +31,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./photoscript.db"
 
     # Security
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = DEFAULT_SECRET_KEY
 
     # Environment
     environment: str = "development"
@@ -46,7 +51,54 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         extra = "ignore"
 
+    @property
+    def is_production(self) -> bool:
+        """프로덕션 환경 여부"""
+        return self.environment.lower() == "production"
+
+    @property
+    def is_development(self) -> bool:
+        """개발 환경 여부"""
+        return self.environment.lower() == "development"
+
+    @field_validator("environment")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
+        """환경 값 검증"""
+        valid_environments = ["development", "production", "test"]
+        if v.lower() not in valid_environments:
+            raise ValueError(f"ENVIRONMENT must be one of {valid_environments}, got '{v}'")
+        return v.lower()
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        """프로덕션 환경에서의 설정 검증"""
+        if self.is_production:
+            # 프로덕션에서 기본 SECRET_KEY 사용 금지
+            if self.secret_key == DEFAULT_SECRET_KEY or not self.secret_key:
+                raise ValueError(
+                    "CRITICAL: SECRET_KEY must be set in production environment. "
+                    "Do not use the default key."
+                )
+
+            # 프로덕션에서 SQLite 사용 금지
+            if "sqlite" in self.database_url.lower():
+                raise ValueError(
+                    "CRITICAL: SQLite is not allowed in production. "
+                    "Use PostgreSQL instead. Set DATABASE_URL to a PostgreSQL connection string."
+                )
+        return self
+
+
+class ConfigurationError(Exception):
+    """설정 오류"""
+    pass
+
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    """설정 객체 반환 (캐싱됨)"""
+    try:
+        return Settings()
+    except Exception as e:
+        raise ConfigurationError(f"Configuration error: {e}") from e

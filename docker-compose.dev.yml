@@ -1,0 +1,43 @@
+# 개발 환경용 Docker Compose 설정
+# Factor X: Dev/Prod Parity - 개발 환경에서도 프로덕션과 동일한 PostgreSQL 사용
+#
+# 사용법:
+#   docker-compose -f docker-compose.dev.yml up -d
+#
+# 환경 변수 설정:
+#   export DATABASE_URL=postgresql://photoscript:photoscript@localhost:5432/photoscript
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: photoscript-postgres-dev
+    environment:
+      POSTGRES_USER: photoscript
+      POSTGRES_PASSWORD: photoscript
+      POSTGRES_DB: photoscript
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U photoscript"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (선택사항 - 캐싱 사용 시)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: photoscript-redis-dev
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+volumes:
+  postgres_data:
+    driver: local
+  # redis_data:
+  #   driver: local

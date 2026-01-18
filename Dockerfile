@@ -45,14 +45,23 @@ COPY --from=frontend-builder /app/frontend/dist ./backend/static/
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
+ENV WORKERS=2
 
 # Expose port (Railway provides PORT env var)
 EXPOSE 7100
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-7100}/health || exit 1
+# Health check (readiness probe)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-7100}/ready || exit 1
 
-# Start server
+# Start server with Gunicorn + Uvicorn workers
 # Railway injects PORT env var automatically
-CMD ["sh", "-c", "cd backend && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7100}"]
+# --timeout-graceful-shutdown: 종료 요청 후 진행 중인 요청 완료 대기 시간
+CMD ["sh", "-c", "cd backend && gunicorn app.main:app \
+    --workers ${WORKERS:-2} \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:${PORT:-7100} \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --access-logfile - \
+    --error-logfile -"]
