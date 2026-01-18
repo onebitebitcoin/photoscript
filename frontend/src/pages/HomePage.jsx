@@ -160,11 +160,7 @@ function HomePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowNewScript(!showNewScript)}
-              className={`p-2 rounded-lg transition-colors ${
-                showNewScript
-                  ? 'bg-dark-card text-gray-400 hover:text-white'
-                  : 'bg-primary text-white hover:bg-primary/90'
-              }`}
+              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors"
               title={showNewScript ? '취소' : '새 스크립트'}
             >
               {showNewScript ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
