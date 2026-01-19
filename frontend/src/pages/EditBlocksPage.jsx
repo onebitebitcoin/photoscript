@@ -261,6 +261,7 @@ function EditBlocksPage() {
             <Fragment key={block.id}>
               <EditableBlockCard
                 block={block}
+                index={index}
                 isNew={newBlockId === block.id}
                 onUpdate={handleUpdateBlock}
                 onBlockChange={handleBlockChange}

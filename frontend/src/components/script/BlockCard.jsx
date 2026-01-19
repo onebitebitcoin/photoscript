@@ -17,8 +17,8 @@ const statusLabels = {
 /**
  * 블록 카드 컴포넌트
  */
-function BlockCard({ block, isSelected, onClick }) {
-  const { index, text, keywords, status, primary_asset } = block
+function BlockCard({ block, index, isSelected, onClick }) {
+  const { text, keywords, status, primary_asset } = block
 
   return (
     <div

@@ -46,6 +46,7 @@ function renderTextWithLinks(text) {
  */
 function EditableBlockCard({
   block,
+  index,
   isSelected,
   isNew,
   onSelect,
@@ -188,7 +189,7 @@ function EditableBlockCard({
             className="w-4 h-4 rounded border-dark-border bg-dark-bg text-primary focus:ring-primary focus:ring-offset-0"
           />
           <span className="text-xs font-medium text-gray-400">
-            BLOCK {block.index + 1}
+            BLOCK {index + 1}
           </span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusBadgeClass(block.status)}`}>
             {block.status}

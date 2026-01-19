@@ -19,10 +19,11 @@ function BlockList({ blocks, selectedId, onSelect, isLoading }) {
 
   return (
     <div className="space-y-3">
-      {blocks.map((block) => (
+      {blocks.map((block, index) => (
         <BlockCard
           key={block.id}
           block={block}
+          index={index}
           isSelected={selectedId === block.id}
           onClick={() => onSelect(block.id)}
         />
