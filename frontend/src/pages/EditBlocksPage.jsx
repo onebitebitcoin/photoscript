@@ -138,9 +138,17 @@ function EditBlocksPage() {
 
   // 새 블록 추가
   const handleAddBlock = async (insertAt) => {
+    // 중복 요청 방지
+    if (isAddingBlock) {
+      logger.warn('Block add request blocked: already in progress')
+      return
+    }
+
     try {
       setIsAddingBlock(true)
       setError(null)
+
+      logger.info('Adding block', { insertAt })
 
       const { data: newBlock } = await projectApi.createBlock(projectId, {
         text: '',
@@ -148,17 +156,8 @@ function EditBlocksPage() {
         insert_at: insertAt
       })
 
-      // Optimistic Update: 전체 로드 대신 직접 블록 추가
-      setBlocks(prev => {
-        const newBlocks = [...prev]
-        // insertAt 위치에 새 블록 삽입
-        newBlocks.splice(insertAt, 0, newBlock)
-        // index 재정렬
-        return newBlocks.map((block, idx) => ({
-          ...block,
-          index: idx
-        }))
-      })
+      // Backend 응답으로 전체 프로젝트 새로고침 (정확성 보장)
+      await loadProject()
 
       // 새 블록 ID 저장 (자동 편집 모드)
       setNewBlockId(newBlock.id)
@@ -182,20 +181,15 @@ function EditBlocksPage() {
     try {
       setError(null)
 
+      logger.info('Deleting block', { blockId })
+
       await blockApi.delete(blockId)
 
       // 선택 목록에서 제거
       setSelectedIds(prev => prev.filter(id => id !== blockId))
 
-      // Optimistic Update: 전체 로드 대신 직접 블록 제거
-      setBlocks(prev => {
-        const newBlocks = prev.filter(b => b.id !== blockId)
-        // index 재정렬
-        return newBlocks.map((block, idx) => ({
-          ...block,
-          index: idx
-        }))
-      })
+      // Backend 응답 후 전체 프로젝트 새로고침 (정확성 보장)
+      await loadProject()
 
       logger.info('Block deleted', { blockId })
       toast.success('블록이 삭제되었습니다')
@@ -283,7 +277,7 @@ function EditBlocksPage() {
             isLoading={isAddingBlock}
           />
 
-          {blocks.map((block, idx) => (
+          {blocks.map((block) => (
             <Fragment key={block.id}>
               <EditableBlockCard
                 block={block}
@@ -297,7 +291,7 @@ function EditBlocksPage() {
               />
               {/* 각 블록 아래에 추가 버튼 */}
               <AddBlockButton
-                onAdd={() => handleAddBlock(idx + 1)}
+                onAdd={() => handleAddBlock(block.index + 1)}
                 isLoading={isAddingBlock}
               />
             </Fragment>

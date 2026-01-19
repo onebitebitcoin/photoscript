@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from uuid import uuid4
@@ -34,6 +34,11 @@ class Block(Base):
         "BlockAsset",
         back_populates="block",
         cascade="all, delete-orphan"
+    )
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('project_id', 'index', name='uq_project_block_index'),
     )
 
     def __repr__(self):

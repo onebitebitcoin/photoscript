@@ -17,9 +17,9 @@ def project_service():
 class TestGetProject:
     """get_project 테스트"""
 
-    def test_get_existing_project(self, db_session, project_service):
+    def test_get_existing_project(self, db_session, project_service, test_user):
         """존재하는 프로젝트 조회"""
-        project = Project(title="테스트", script_raw="테스트 스크립트")
+        project = Project(user_id=test_user.id, title="테스트", script_raw="테스트 스크립트")
         db_session.add(project)
         db_session.commit()
         db_session.refresh(project)
@@ -37,23 +37,23 @@ class TestGetProject:
 class TestGetProjects:
     """get_projects 테스트"""
 
-    def test_get_projects_empty(self, db_session, project_service):
+    def test_get_projects_empty(self, db_session, project_service, test_user):
         """빈 목록 조회"""
-        result = project_service.get_projects(db_session)
+        result = project_service.get_projects(db_session, test_user.id)
         assert result == []
 
-    def test_get_projects_ordered_by_created_at(self, db_session, project_service):
+    def test_get_projects_ordered_by_created_at(self, db_session, project_service, test_user):
         """최신순 정렬 확인"""
         # 프로젝트 2개 생성
-        p1 = Project(title="첫번째", script_raw="테스트")
+        p1 = Project(user_id=test_user.id, title="첫번째", script_raw="테스트")
         db_session.add(p1)
         db_session.commit()
 
-        p2 = Project(title="두번째", script_raw="테스트")
+        p2 = Project(user_id=test_user.id, title="두번째", script_raw="테스트")
         db_session.add(p2)
         db_session.commit()
 
-        result = project_service.get_projects(db_session)
+        result = project_service.get_projects(db_session, test_user.id)
         assert len(result) == 2
         # 최신순이므로 두번째가 먼저
         assert result[0].title == "두번째"
@@ -63,10 +63,11 @@ class TestGetProjects:
 class TestCreateProject:
     """create_project 테스트"""
 
-    def test_create_project_with_title(self, db_session, project_service):
+    def test_create_project_with_title(self, db_session, project_service, test_user):
         """제목 있는 프로젝트 생성"""
         result = project_service.create_project(
             db_session,
+            user_id=test_user.id,
             title="새 프로젝트",
             script_raw="스크립트 내용"
         )
@@ -75,10 +76,11 @@ class TestCreateProject:
         assert result.title == "새 프로젝트"
         assert result.script_raw == "스크립트 내용"
 
-    def test_create_project_without_title(self, db_session, project_service):
+    def test_create_project_without_title(self, db_session, project_service, test_user):
         """제목 없는 프로젝트 생성"""
         result = project_service.create_project(
             db_session,
+            user_id=test_user.id,
             title=None,
             script_raw="스크립트"
         )
@@ -90,23 +92,23 @@ class TestCreateProject:
 class TestDeleteProject:
     """delete_project 테스트"""
 
-    def test_delete_project_success(self, db_session, project_service):
+    def test_delete_project_success(self, db_session, project_service, test_user):
         """프로젝트 삭제 성공"""
-        project = Project(title="삭제할 프로젝트", script_raw="테스트")
+        project = Project(user_id=test_user.id, title="삭제할 프로젝트", script_raw="테스트")
         db_session.add(project)
         db_session.commit()
         db_session.refresh(project)
 
         project_id = project.id
-        project_service.delete_project(db_session, project_id)
+        project_service.delete_project(db_session, project_id, test_user.id)
 
         # 삭제 확인
         result = db_session.query(Project).filter(Project.id == project_id).first()
         assert result is None
 
-    def test_delete_project_with_blocks(self, db_session, project_service):
+    def test_delete_project_with_blocks(self, db_session, project_service, test_user):
         """블록이 있는 프로젝트 삭제"""
-        project = Project(title="테스트", script_raw="테스트")
+        project = Project(user_id=test_user.id, title="테스트", script_raw="테스트")
         db_session.add(project)
         db_session.commit()
         db_session.refresh(project)
@@ -123,13 +125,13 @@ class TestDeleteProject:
         db_session.commit()
 
         project_id = project.id
-        project_service.delete_project(db_session, project_id)
+        project_service.delete_project(db_session, project_id, test_user.id)
 
         # 프로젝트와 블록 모두 삭제 확인
         assert db_session.query(Project).filter(Project.id == project_id).first() is None
         assert db_session.query(Block).filter(Block.project_id == project_id).first() is None
 
-    def test_delete_nonexistent_project_raises_error(self, db_session, project_service):
+    def test_delete_nonexistent_project_raises_error(self, db_session, project_service, test_user):
         """존재하지 않는 프로젝트 삭제 시 에러"""
         with pytest.raises(ProjectNotFoundError):
-            project_service.delete_project(db_session, "non-existent-id")
+            project_service.delete_project(db_session, "non-existent-id", test_user.id)

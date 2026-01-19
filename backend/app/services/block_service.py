@@ -71,31 +71,38 @@ class BlockService:
             keywords: 키워드 리스트
             insert_at: 삽입 위치 인덱스
         """
-        # 기존 블록들의 인덱스 조정 (insert_at 이상인 블록들 +1)
-        existing_blocks = db.query(Block).filter(
-            Block.project_id == project_id,
-            Block.index >= insert_at
-        ).order_by(Block.index.desc()).all()
+        try:
+            # 기존 블록들의 인덱스 조정 (insert_at 이상인 블록들 +1)
+            # 역순으로 정렬하여 UNIQUE constraint 충돌 방지
+            existing_blocks = db.query(Block).filter(
+                Block.project_id == project_id,
+                Block.index >= insert_at
+            ).order_by(Block.index.desc()).all()
 
-        for block in existing_blocks:
-            block.index += 1
+            for block in existing_blocks:
+                block.index += 1
+                db.flush()  # 각 블록을 즉시 flush하여 constraint 충돌 방지
 
-        db.commit()
+            # 새 블록 생성
+            new_block = Block(
+                project_id=project_id,
+                index=insert_at,
+                text=text,
+                keywords=keywords or [],
+                status=BlockStatus.DRAFT
+            )
+            db.add(new_block)
 
-        # 새 블록 생성
-        new_block = Block(
-            project_id=project_id,
-            index=insert_at,
-            text=text,
-            keywords=keywords or [],
-            status=BlockStatus.DRAFT
-        )
-        db.add(new_block)
-        db.commit()
-        db.refresh(new_block)
+            # 단일 트랜잭션으로 커밋
+            db.commit()
+            db.refresh(new_block)
 
-        logger.info(f"블록 생성: block_id={new_block.id}, index={new_block.index}")
-        return new_block
+            logger.info(f"블록 생성: block_id={new_block.id}, index={new_block.index}")
+            return new_block
+        except Exception as e:
+            db.rollback()
+            logger.error(f"블록 생성 실패: {str(e)}", exc_info=True)
+            raise
 
     def update_block(
         self,
@@ -212,6 +219,17 @@ class BlockService:
         block.keywords = block.keywords[:3] if block.keywords else []
         block.status = BlockStatus.DRAFT
 
+        # 후속 블록들 인덱스 업데이트 (새 블록 추가 전에 먼저 수행)
+        # 역순으로 정렬하여 UNIQUE constraint 충돌 방지
+        subsequent_blocks = db.query(Block).filter(
+            Block.project_id == block.project_id,
+            Block.index > block.index
+        ).order_by(Block.index.desc()).all()
+
+        for b in subsequent_blocks:
+            b.index += 1
+            db.flush()  # 각 블록을 즉시 flush하여 constraint 충돌 방지
+
         # 두 번째 블록 생성
         new_block = Block(
             project_id=block.project_id,
@@ -221,18 +239,8 @@ class BlockService:
             status=BlockStatus.DRAFT
         )
         db.add(new_block)
-        db.commit()
 
-        # 후속 블록들 인덱스 업데이트
-        subsequent_blocks = db.query(Block).filter(
-            Block.project_id == block.project_id,
-            Block.index > block.index,
-            Block.id != new_block.id
-        ).order_by(Block.index).all()
-
-        for b in subsequent_blocks:
-            b.index += 1
-
+        # 단일 트랜잭션으로 커밋
         db.commit()
         db.refresh(block)
         db.refresh(new_block)

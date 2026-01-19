@@ -15,9 +15,10 @@ def block_service():
 
 
 @pytest.fixture
-def project(db_session):
+def project(db_session, test_user):
     """테스트용 프로젝트"""
     project = Project(
+        user_id=test_user.id,
         title="테스트 프로젝트",
         script_raw="테스트"
     )

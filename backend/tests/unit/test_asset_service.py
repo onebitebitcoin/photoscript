@@ -29,9 +29,10 @@ def sample_asset_data():
 
 
 @pytest.fixture
-def project_with_block(db_session):
+def project_with_block(db_session, test_user):
     """테스트용 프로젝트와 블록"""
     project = Project(
+        user_id=test_user.id,
         title="테스트 프로젝트",
         script_raw="테스트"
     )

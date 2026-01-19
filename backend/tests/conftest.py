@@ -53,6 +53,21 @@ def db_session():
 
 
 @pytest.fixture(scope="function")
+def test_user(db_session):
+    """테스트용 사용자 픽스처"""
+    from app.models import User
+
+    user = User(
+        nickname="testuser",
+        password_hash="hashed_password"
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
 def client(db_session):
     """테스트 클라이언트 픽스처"""
     app.dependency_overrides[get_db] = override_get_db
