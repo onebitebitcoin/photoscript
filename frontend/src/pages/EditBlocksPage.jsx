@@ -178,6 +178,9 @@ function EditBlocksPage() {
 
   // 블록 삭제
   const handleDeleteBlock = async (blockId) => {
+    // 삭제 확인
+    if (!confirm('블록을 삭제하시겠습니까?')) return
+
     try {
       setError(null)
 
