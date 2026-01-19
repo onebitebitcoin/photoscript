@@ -13,9 +13,10 @@ from app.models.block import BlockStatus
 
 
 @pytest.fixture
-def project_with_blocks(db_session):
-    """테스트용 프로젝트와 블록 생성"""
+def project_with_blocks(db_session, test_user):
+    """테스트용 프로젝트와 블록 생성 (Fractional Indexing)"""
     project = Project(
+        user_id=test_user.id,
         title="테스트 프로젝트",
         script_raw="테스트 스크립트 내용"
     )
@@ -27,7 +28,7 @@ def project_with_blocks(db_session):
     for i in range(3):
         block = Block(
             project_id=project.id,
-            index=i,
+            order=float(i + 1),  # 1.0, 2.0, 3.0
             text=f"블록 {i+1}의 텍스트 내용입니다. 충분히 긴 텍스트가 필요합니다.",
             keywords=[f"키워드{i+1}"],
             status=BlockStatus.DRAFT
@@ -164,20 +165,20 @@ class TestBlockDelete:
         project_response = client.get(f"/api/v1/projects/{project.id}")
         assert len(project_response.json()["blocks"]) == 2
 
-    def test_delete_block_reindex(self, client, project_with_blocks, db_session):
-        """블록 삭제 후 인덱스 재정렬 확인"""
+    def test_delete_block_keeps_order(self, client, project_with_blocks, db_session):
+        """블록 삭제 후 다른 블록 order 유지 확인 (Fractional Indexing)"""
         project, blocks = project_with_blocks
 
-        # 첫 번째 블록 삭제
+        # 첫 번째 블록 삭제 (order=1.0)
         client.delete(f"/api/v1/blocks/{blocks[0].id}")
 
-        # 프로젝트 조회해서 인덱스 확인
+        # 프로젝트 조회해서 order 확인
         project_response = client.get(f"/api/v1/projects/{project.id}")
         remaining_blocks = project_response.json()["blocks"]
 
-        # 인덱스가 0부터 재정렬되었는지 확인
-        indices = [b["index"] for b in remaining_blocks]
-        assert indices == [0, 1]
+        # Fractional Indexing: 다른 블록의 order는 변경되지 않음
+        orders = [b["order"] for b in remaining_blocks]
+        assert orders == [2.0, 3.0]
 
     def test_delete_block_not_found(self, client):
         """존재하지 않는 블록 삭제"""

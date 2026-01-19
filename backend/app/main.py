@@ -37,6 +37,7 @@ def validate_environment():
 
 def run_migrations():
     """마이그레이션 실행"""
+    # m001: user_id 컬럼 추가
     try:
         from migrations.m001_add_user_id_to_projects import run_migration, run_migration_sqlite
         if "sqlite" in settings.database_url:
@@ -44,7 +45,17 @@ def run_migrations():
         else:
             run_migration()
     except Exception as e:
-        logger.warning(f"마이그레이션 실행 중 오류 (무시됨): {e}")
+        logger.warning(f"m001 마이그레이션 중 오류 (무시됨): {e}")
+
+    # m003: index -> order 변경 (Fractional Indexing)
+    try:
+        from migrations.m003_change_index_to_order_float import run_migration as run_m003, run_migration_sqlite as run_m003_sqlite
+        if "sqlite" in settings.database_url:
+            run_m003_sqlite()
+        else:
+            run_m003()
+    except Exception as e:
+        logger.warning(f"m003 마이그레이션 중 오류 (무시됨): {e}")
 
 
 @asynccontextmanager

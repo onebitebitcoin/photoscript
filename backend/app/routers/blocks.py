@@ -406,7 +406,7 @@ async def generate_text_for_block(
     return GenerateTextResponse(
         id=block.id,
         project_id=block.project_id,
-        index=block.index,
+        order=block.order,
         text=block.text,
         keywords=block.keywords,
         status=status_value,

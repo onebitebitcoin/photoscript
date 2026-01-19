@@ -1,10 +1,10 @@
 """
 BlockService - 블록 관련 비즈니스 로직
 
-Unix 철학 원칙 적용:
-- 원칙 1 (모듈성): 블록 관련 로직을 단일 모듈로 분리
-- 원칙 4 (분리): Router(인터페이스) / Service(비즈니스 로직) / Model(데이터)
-- 원칙 5 (단순성): 중복 코드 통합
+Fractional Indexing 방식:
+- order 필드를 Float로 사용하여 중간 삽입 시 다른 블록 수정 불필요
+- 예: 1.0과 2.0 사이에 삽입 → 1.5
+- 삭제 시에도 다른 블록 수정 불필요
 """
 
 from typing import List, Optional, Tuple
@@ -13,12 +13,15 @@ from sqlalchemy.orm import Session
 from app.models import Block
 from app.models.block import BlockStatus
 from app.services.asset_service import AssetService
-from app.errors import BlockNotFoundError, BlockMergeError, BlockSplitError
+from app.errors import BlockNotFoundError, BlockSplitError
 from app.utils.logger import logger
 
 
 class BlockService:
     """블록 관련 비즈니스 로직"""
+
+    # order 값 간격 (새 블록 생성 시 기본 간격)
+    ORDER_GAP = 1.0
 
     def __init__(self):
         self.asset_service = AssetService()
@@ -44,10 +47,10 @@ class BlockService:
         db: Session,
         project_id: str
     ) -> List[Block]:
-        """프로젝트의 모든 블록 조회 (인덱스순)"""
+        """프로젝트의 모든 블록 조회 (order순)"""
         return db.query(Block).filter(
             Block.project_id == project_id
-        ).order_by(Block.index).all()
+        ).order_by(Block.order).all()
 
     # ==========================================================================
     # 생성/수정/삭제
@@ -59,45 +62,45 @@ class BlockService:
         project_id: str,
         text: str,
         keywords: List[str] = None,
-        insert_at: int = 0
+        order: float = None
     ) -> Block:
         """
-        새 블록 생성
+        새 블록 생성 (Fractional Indexing)
 
         Args:
             db: DB 세션
             project_id: 프로젝트 ID
             text: 블록 텍스트
             keywords: 키워드 리스트
-            insert_at: 삽입 위치 인덱스
+            order: 블록 순서 (None이면 맨 뒤에 추가)
+
+        다른 블록의 order 값을 변경하지 않음 - 단순 INSERT만 수행
         """
         try:
-            # 기존 블록들의 인덱스 조정 (insert_at 이상인 블록들 +1)
-            # 역순으로 정렬하여 UNIQUE constraint 충돌 방지
-            existing_blocks = db.query(Block).filter(
-                Block.project_id == project_id,
-                Block.index >= insert_at
-            ).order_by(Block.index.desc()).all()
+            # order가 지정되지 않으면 맨 뒤에 추가
+            if order is None:
+                last_block = db.query(Block).filter(
+                    Block.project_id == project_id
+                ).order_by(Block.order.desc()).first()
 
-            for block in existing_blocks:
-                block.index += 1
-                db.flush()  # 각 블록을 즉시 flush하여 constraint 충돌 방지
+                if last_block:
+                    order = last_block.order + self.ORDER_GAP
+                else:
+                    order = self.ORDER_GAP
 
-            # 새 블록 생성
+            # 새 블록 생성 - INSERT만 수행, 다른 블록 수정 없음
             new_block = Block(
                 project_id=project_id,
-                index=insert_at,
+                order=order,
                 text=text,
                 keywords=keywords or [],
                 status=BlockStatus.DRAFT
             )
             db.add(new_block)
-
-            # 단일 트랜잭션으로 커밋
             db.commit()
             db.refresh(new_block)
 
-            logger.info(f"블록 생성: block_id={new_block.id}, index={new_block.index}")
+            logger.info(f"블록 생성: block_id={new_block.id}, order={new_block.order}")
             return new_block
         except Exception as e:
             db.rollback()
@@ -138,35 +141,18 @@ class BlockService:
 
     def delete_block(self, db: Session, block_id: str) -> None:
         """
-        블록 삭제
+        블록 삭제 (Fractional Indexing)
 
-        삭제 후 후속 블록들의 인덱스 재정렬
-        단일 트랜잭션으로 처리하여 데이터 일관성 보장
+        다른 블록의 order 값을 변경하지 않음 - 단순 DELETE만 수행
         """
         try:
             block = self.get_block(db, block_id)
-            project_id = block.project_id
-            deleted_index = block.index
 
-            # Step 1: 에셋 연결 삭제 (커밋 없이)
+            # 에셋 연결 삭제
             self.asset_service.delete_block_assets(db, block_id, auto_commit=False)
 
-            # Step 2: 블록 삭제
+            # 블록 삭제 - DELETE만 수행, 다른 블록 수정 없음
             db.delete(block)
-            db.flush()  # 블록 삭제를 먼저 반영하여 인덱스 재정렬 시 충돌 방지
-
-            # Step 3: 후속 블록들 인덱스 재정렬
-            # 오름차순으로 정렬하여 순차적으로 인덱스 감소
-            subsequent_blocks = db.query(Block).filter(
-                Block.project_id == project_id,
-                Block.index > deleted_index
-            ).order_by(Block.index).all()
-
-            for b in subsequent_blocks:
-                b.index -= 1
-                db.flush()  # 각 블록을 즉시 flush하여 UniqueConstraint 충돌 방지
-
-            # 단일 트랜잭션으로 커밋
             db.commit()
 
             logger.info(f"블록 삭제: block_id={block_id}")
@@ -186,7 +172,7 @@ class BlockService:
         split_position: int
     ) -> Tuple[Block, Block]:
         """
-        블록을 두 개로 나누기
+        블록을 두 개로 나누기 (Fractional Indexing)
 
         Args:
             db: DB 세션
@@ -196,8 +182,7 @@ class BlockService:
         Returns:
             Tuple[Block, Block]: (첫 번째 블록, 두 번째 블록)
 
-        Raises:
-            BlockSplitError: 분할 위치가 유효하지 않을 때
+        두 번째 블록의 order는 원본과 다음 블록 사이의 중간값
         """
         block = self.get_block(db, block_id)
         text = block.text
@@ -228,111 +213,34 @@ class BlockService:
         block.keywords = block.keywords[:3] if block.keywords else []
         block.status = BlockStatus.DRAFT
 
-        # 후속 블록들 인덱스 업데이트 (새 블록 추가 전에 먼저 수행)
-        # 역순으로 정렬하여 UNIQUE constraint 충돌 방지
-        subsequent_blocks = db.query(Block).filter(
+        # 다음 블록 찾기 (order가 현재 블록보다 큰 첫 번째 블록)
+        next_block = db.query(Block).filter(
             Block.project_id == block.project_id,
-            Block.index > block.index
-        ).order_by(Block.index.desc()).all()
+            Block.order > block.order
+        ).order_by(Block.order).first()
 
-        for b in subsequent_blocks:
-            b.index += 1
-            db.flush()  # 각 블록을 즉시 flush하여 constraint 충돌 방지
+        # 새 블록의 order 계산 (원본과 다음 블록 사이의 중간값)
+        if next_block:
+            new_order = (block.order + next_block.order) / 2
+        else:
+            new_order = block.order + self.ORDER_GAP
 
         # 두 번째 블록 생성
         new_block = Block(
             project_id=block.project_id,
-            index=block.index + 1,
+            order=new_order,
             text=second_text,
             keywords=block.keywords[3:] if block.keywords and len(block.keywords) > 3 else [],
             status=BlockStatus.DRAFT
         )
         db.add(new_block)
 
-        # 단일 트랜잭션으로 커밋
         db.commit()
         db.refresh(block)
         db.refresh(new_block)
 
         logger.info(f"블록 분할: {block_id} -> {block.id}, {new_block.id}")
         return block, new_block
-
-    def merge_blocks(
-        self,
-        db: Session,
-        project_id: str,
-        block_ids: List[str]
-    ) -> Block:
-        """
-        여러 블록을 하나로 합치기
-
-        Args:
-            db: DB 세션
-            project_id: 프로젝트 ID
-            block_ids: 합칠 블록 ID 리스트
-
-        Returns:
-            Block: 합쳐진 블록
-
-        Raises:
-            BlockMergeError: 합칠 수 없을 때
-        """
-        # 블록 조회
-        blocks = db.query(Block).filter(
-            Block.id.in_(block_ids),
-            Block.project_id == project_id
-        ).order_by(Block.index).all()
-
-        if len(blocks) != len(block_ids):
-            raise BlockMergeError(
-                "일부 블록을 찾을 수 없습니다",
-                {"requested": block_ids, "found": [b.id for b in blocks]}
-            )
-
-        # 인접한 블록인지 확인
-        indices = [b.index for b in blocks]
-        for i in range(len(indices) - 1):
-            if indices[i + 1] - indices[i] != 1:
-                raise BlockMergeError(
-                    "인접한 블록만 합칠 수 있습니다",
-                    {"indices": indices}
-                )
-
-        # 첫 번째 블록에 텍스트 합치기
-        merged_text = "\n\n".join([b.text for b in blocks])
-        merged_keywords = []
-        for b in blocks:
-            if b.keywords:
-                for kw in b.keywords:
-                    if kw not in merged_keywords:
-                        merged_keywords.append(kw)
-
-        first_block = blocks[0]
-        first_block.text = merged_text
-        first_block.keywords = merged_keywords[:10]  # 최대 10개
-        first_block.status = BlockStatus.DRAFT
-
-        # 나머지 블록 삭제
-        for block in blocks[1:]:
-            self.asset_service.delete_block_assets(db, block.id, auto_commit=False)
-            db.delete(block)
-
-        db.flush()  # 삭제를 먼저 반영하여 인덱스 재정렬 시 충돌 방지
-
-        # 인덱스 재정렬
-        remaining_blocks = db.query(Block).filter(
-            Block.project_id == project_id
-        ).order_by(Block.index).all()
-
-        for new_idx, block in enumerate(remaining_blocks):
-            block.index = new_idx
-            db.flush()  # 각 블록을 즉시 flush하여 UniqueConstraint 충돌 방지
-
-        db.commit()
-        db.refresh(first_block)
-
-        logger.info(f"블록 합치기: {len(block_ids)}개 -> 1개")
-        return first_block
 
     # ==========================================================================
     # 상태 변경
@@ -400,17 +308,23 @@ class BlockService:
         return block
 
     # ==========================================================================
-    # 인덱스 재정렬
+    # order 재정렬 (주기적 정리용)
     # ==========================================================================
 
     def reindex_blocks(self, db: Session, project_id: str) -> List[Block]:
-        """프로젝트 내 모든 블록 인덱스 재정렬"""
+        """
+        프로젝트 내 모든 블록 order 재정렬
+
+        Fractional indexing으로 인해 order 값이 너무 정밀해지면
+        주기적으로 정수 간격으로 재정렬 (1.0, 2.0, 3.0, ...)
+        """
         blocks = db.query(Block).filter(
             Block.project_id == project_id
-        ).order_by(Block.index).all()
+        ).order_by(Block.order).all()
 
-        for new_idx, block in enumerate(blocks):
-            block.index = new_idx
+        for idx, block in enumerate(blocks):
+            block.order = float(idx + 1) * self.ORDER_GAP
 
         db.commit()
+        logger.info(f"블록 order 재정렬: project_id={project_id}, count={len(blocks)}")
         return blocks

@@ -18,7 +18,6 @@ from app.schemas import (
     SplitResponse,
     MatchOptions,
     MatchResponse,
-    BlockMergeRequest,
     BlockCreate
 )
 from app.schemas.project import BlockSummary, AssetSummary
@@ -26,7 +25,7 @@ from app.services import process_script, ScriptProcessingError, PexelsClient, ma
 from app.services.asset_service import AssetService
 from app.services.block_service import BlockService
 from app.services.project_service import ProjectService
-from app.errors import BlockMergeError, ProjectNotFoundError
+from app.errors import ProjectNotFoundError
 from app.config import get_settings
 from app.utils.logger import logger
 
@@ -137,7 +136,7 @@ async def get_project(
 
         blocks_data.append(BlockSummary(
             id=block.id,
-            index=block.index,
+            order=block.order,
             text=block.text,
             keywords=block.keywords,
             status=block.status,
@@ -210,10 +209,10 @@ async def generate_visuals(
         text = block_data["text"]
         keywords = block_data.get("keywords", [])
 
-        # 블록 생성
+        # 블록 생성 (Fractional indexing)
         block = Block(
             project_id=project_id,
-            index=idx,
+            order=float(idx + 1),  # 1.0, 2.0, 3.0, ...
             text=text,
             keywords=keywords,
             status=BlockStatus.PENDING
@@ -320,12 +319,12 @@ async def split_script(
             detail={"message": "스크립트를 분할할 수 없습니다. 내용을 확인해주세요."}
         )
 
-    # 블록 생성 (DRAFT 상태)
+    # 블록 생성 (DRAFT 상태) - Fractional indexing 사용
     blocks_data = []
     for idx, block_data in enumerate(processed_blocks):
         block = Block(
             project_id=project_id,
-            index=idx,
+            order=float(idx + 1),  # 1.0, 2.0, 3.0, ...
             text=block_data["text"],
             keywords=block_data.get("keywords", []),
             status=BlockStatus.DRAFT
@@ -336,7 +335,7 @@ async def split_script(
 
         blocks_data.append(BlockSummary(
             id=block.id,
-            index=block.index,
+            order=block.order,
             text=block.text,
             keywords=block.keywords,
             status=block.status,
@@ -371,7 +370,7 @@ async def match_assets(
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
     # 블록 확인
-    blocks = db.query(Block).filter(Block.project_id == project_id).order_by(Block.index).all()
+    blocks = db.query(Block).filter(Block.project_id == project_id).order_by(Block.order).all()
     if not blocks:
         raise HTTPException(
             status_code=400,
@@ -392,12 +391,12 @@ async def match_assets(
     logger.info(f"{len(blocks)}개 블록 에셋 매칭 시작 (video_priority={video_priority})")
 
     matched_count = 0
-    for block in blocks:
-        logger.info(f"블록 {block.index+1}/{len(blocks)} 처리 중")
+    for idx, block in enumerate(blocks):
+        logger.info(f"블록 {idx+1}/{len(blocks)} 처리 중")
 
         # 키워드가 없으면 NO_RESULT
         if not block.keywords:
-            logger.warning(f"블록 {block.index+1}: 키워드 없음")
+            logger.warning(f"블록 {idx+1}: 키워드 없음")
             asset_service.delete_block_assets(db, block.id)
             block.status = BlockStatus.NO_RESULT
             db.commit()
@@ -436,32 +435,6 @@ async def match_assets(
     )
 
 
-@router.post("/{project_id}/blocks/merge", response_model=BlockResponse)
-async def merge_blocks(
-    project_id: str,
-    request: BlockMergeRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """여러 블록을 하나로 합치기 (본인 소유만)"""
-    logger.info(f"블록 합치기: project_id={project_id}, user_id={current_user.id}")
-
-    project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.user_id == current_user.id
-    ).first()
-    if not project:
-        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
-
-    try:
-        merged_block = block_service.merge_blocks(db, project_id, request.block_ids)
-    except BlockMergeError as e:
-        raise HTTPException(status_code=400, detail={"message": e.message})
-
-    logger.info(f"블록 합치기 완료: {len(request.block_ids)}개 -> 1개")
-    return merged_block
-
-
 @router.post("/{project_id}/blocks", response_model=BlockResponse)
 async def create_block(
     project_id: str,
@@ -484,8 +457,8 @@ async def create_block(
         project_id,
         text=request.text,
         keywords=request.keywords,
-        insert_at=request.insert_at
+        order=request.order
     )
 
-    logger.info(f"블록 추가 완료: block_id={new_block.id}, index={new_block.index}")
+    logger.info(f"블록 추가 완료: block_id={new_block.id}, order={new_block.order}")
     return new_block

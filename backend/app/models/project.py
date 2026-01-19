@@ -25,7 +25,7 @@ class Project(Base):
         "Block",
         back_populates="project",
         cascade="all, delete-orphan",
-        order_by="Block.index"
+        order_by="Block.order"
     )
 
     def __repr__(self):

@@ -42,7 +42,7 @@ def project_with_block(db_session, test_user):
 
     block = Block(
         project_id=project.id,
-        index=0,
+        order=1.0,  # Fractional indexing
         text="테스트 블록",
         keywords=["test"],
         status=BlockStatus.DRAFT

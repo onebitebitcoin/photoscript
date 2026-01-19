@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, String, Text, Float, DateTime, ForeignKey, JSON, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from uuid import uuid4
@@ -16,12 +16,17 @@ class BlockStatus:
 
 
 class Block(Base):
-    """블록 모델 - 스크립트를 의미 단위로 나눈 조각"""
+    """블록 모델 - 스크립트를 의미 단위로 나눈 조각
+
+    순서 관리: Fractional Indexing 방식
+    - order 필드를 Float로 사용하여 중간 삽입 시 다른 블록 수정 불필요
+    - 예: 1.0과 2.0 사이에 삽입 → 1.5
+    """
     __tablename__ = "blocks"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     project_id = Column(String, ForeignKey("projects.id"), nullable=False)
-    index = Column(Integer, nullable=False)
+    order = Column(Float, nullable=False, default=0.0)  # Fractional indexing
     text = Column(Text, nullable=False)
     keywords = Column(JSON, nullable=True)  # ["keyword1", "keyword2", ...]
     status = Column(String(20), default=BlockStatus.PENDING)
@@ -36,10 +41,10 @@ class Block(Base):
         cascade="all, delete-orphan"
     )
 
-    # Constraints
+    # Indexes (UniqueConstraint 제거 - Float은 중간값 사용으로 충돌 없음)
     __table_args__ = (
-        UniqueConstraint('project_id', 'index', name='uq_project_block_index'),
+        Index('ix_blocks_project_order', 'project_id', 'order'),
     )
 
     def __repr__(self):
-        return f"<Block(id={self.id}, index={self.index}, status={self.status})>"
+        return f"<Block(id={self.id}, order={self.order}, status={self.status})>"

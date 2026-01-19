@@ -61,11 +61,6 @@ class BlockValidationError(BlockError):
     pass
 
 
-class BlockMergeError(BlockError):
-    """블록 합치기 실패"""
-    pass
-
-
 class BlockSplitError(BlockError):
     """블록 나누기 실패"""
     pass

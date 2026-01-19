@@ -6,8 +6,7 @@ Projects API 통합 테스트
 - POST /projects - 프로젝트 생성
 - GET /projects/{id} - 프로젝트 상세 조회
 - DELETE /projects/{id} - 프로젝트 삭제
-- POST /projects/{id}/blocks - 블록 추가
-- POST /projects/{id}/blocks/merge - 블록 합치기
+- POST /projects/{id}/blocks - 블록 추가 (Fractional Indexing)
 """
 
 class TestProjectsList:
@@ -137,7 +136,7 @@ class TestProjectDelete:
 
 
 class TestBlockCreate:
-    """블록 추가 테스트"""
+    """블록 추가 테스트 (Fractional Indexing)"""
 
     def test_create_block_success(self, client):
         """블록 추가 성공"""
@@ -148,18 +147,18 @@ class TestBlockCreate:
         })
         project_id = create_response.json()["id"]
 
-        # 블록 추가
+        # 블록 추가 (Fractional Indexing)
         response = client.post(f"/api/v1/projects/{project_id}/blocks", json={
             "text": "새로운 블록 텍스트",
             "keywords": ["키워드1", "키워드2"],
-            "insert_at": 0
+            "order": 1.0
         })
 
         assert response.status_code == 200
         data = response.json()
         assert data["text"] == "새로운 블록 텍스트"
         assert data["keywords"] == ["키워드1", "키워드2"]
-        assert data["index"] == 0
+        assert data["order"] == 1.0
 
     def test_create_block_empty_text(self, client):
         """빈 텍스트 블록 추가 (허용)"""
@@ -173,99 +172,18 @@ class TestBlockCreate:
         # 빈 블록 추가
         response = client.post(f"/api/v1/projects/{project_id}/blocks", json={
             "text": "",
-            "insert_at": 0
+            "order": 1.5
         })
 
         assert response.status_code == 200
         assert response.json()["text"] == ""
+        assert response.json()["order"] == 1.5
 
     def test_create_block_project_not_found(self, client):
         """존재하지 않는 프로젝트에 블록 추가"""
         response = client.post("/api/v1/projects/non-existent/blocks", json={
             "text": "테스트",
-            "insert_at": 0
+            "order": 1.0
         })
 
         assert response.status_code == 404
-
-
-class TestBlockMerge:
-    """블록 합치기 테스트"""
-
-    def test_merge_blocks_success(self, client, db_session):
-        """블록 합치기 성공"""
-        from app.models import Project, Block
-        from app.models.block import BlockStatus
-
-        # 프로젝트와 블록 직접 생성
-        project = Project(
-            title="합치기 테스트",
-            script_raw="테스트 스크립트"
-        )
-        db_session.add(project)
-        db_session.commit()
-        db_session.refresh(project)
-
-        # 블록 3개 생성
-        blocks = []
-        for i in range(3):
-            block = Block(
-                project_id=project.id,
-                index=i,
-                text=f"블록 {i+1} 텍스트",
-                keywords=[f"키워드{i+1}"],
-                status=BlockStatus.DRAFT
-            )
-            db_session.add(block)
-            db_session.commit()
-            db_session.refresh(block)
-            blocks.append(block)
-
-        # 첫 두 블록 합치기
-        response = client.post(
-            f"/api/v1/projects/{project.id}/blocks/merge",
-            json={"block_ids": [blocks[0].id, blocks[1].id]}
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "블록 1 텍스트" in data["text"]
-        assert "블록 2 텍스트" in data["text"]
-
-    def test_merge_non_adjacent_blocks_fail(self, client, db_session):
-        """인접하지 않은 블록 합치기 실패"""
-        from app.models import Project, Block
-        from app.models.block import BlockStatus
-
-        # 프로젝트와 블록 생성
-        project = Project(
-            title="테스트",
-            script_raw="테스트"
-        )
-        db_session.add(project)
-        db_session.commit()
-        db_session.refresh(project)
-
-        # 블록 3개 생성
-        blocks = []
-        for i in range(3):
-            block = Block(
-                project_id=project.id,
-                index=i,
-                text=f"블록 {i+1}",
-                keywords=[],
-                status=BlockStatus.DRAFT
-            )
-            db_session.add(block)
-            db_session.commit()
-            db_session.refresh(block)
-            blocks.append(block)
-
-        # 첫 번째와 세 번째 블록 합치기 (인접하지 않음)
-        response = client.post(
-            f"/api/v1/projects/{project.id}/blocks/merge",
-            json={"block_ids": [blocks[0].id, blocks[2].id]}
-        )
-
-        assert response.status_code == 400
-        assert "인접한 블록만" in response.json()["detail"]["message"]

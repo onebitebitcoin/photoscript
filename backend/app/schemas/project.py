@@ -24,7 +24,7 @@ class ProjectResponse(BaseModel):
 class BlockSummary(BaseModel):
     """블록 요약 (프로젝트 상세 조회용)"""
     id: str
-    index: int
+    order: float
     text: str
     keywords: Optional[List[str]]
     status: str

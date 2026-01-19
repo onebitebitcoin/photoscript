@@ -68,9 +68,17 @@ def test_user(db_session):
 
 
 @pytest.fixture(scope="function")
-def client(db_session):
-    """테스트 클라이언트 픽스처"""
+def client(db_session, test_user):
+    """테스트 클라이언트 픽스처 (인증 포함)"""
+    from app.dependencies import get_current_user
+
     app.dependency_overrides[get_db] = override_get_db
+
+    # 인증 우회: 테스트용 사용자로 설정
+    def override_get_current_user():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
     # 테이블 생성
     Base.metadata.create_all(bind=engine)

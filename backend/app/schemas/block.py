@@ -7,7 +7,7 @@ class BlockResponse(BaseModel):
     """블록 응답"""
     id: str
     project_id: str
-    index: int
+    order: float
     text: str
     keywords: Optional[List[str]]
     status: str
@@ -35,7 +35,7 @@ class BlockWithAssetResponse(BaseModel):
     """블록 응답 (대표 에셋 포함)"""
     id: str
     project_id: str
-    index: int
+    order: float
     text: str
     keywords: Optional[List[str]]
     status: str
@@ -63,11 +63,6 @@ class BlockSplitRequest(BaseModel):
     split_position: int = Field(..., ge=1, description="나눌 위치 (문자 인덱스)")
 
 
-class BlockMergeRequest(BaseModel):
-    """블록 합치기 요청"""
-    block_ids: List[str] = Field(..., min_length=2, max_length=5, description="합칠 블록 ID 목록")
-
-
 class BlockSearchRequest(BaseModel):
     """키워드 검색 요청"""
     keyword: str = Field(..., min_length=1, max_length=100, description="검색할 키워드")
@@ -78,7 +73,7 @@ class BlockCreate(BaseModel):
     """새 블록 생성 요청"""
     text: str = Field(default="", description="블록 텍스트")
     keywords: Optional[List[str]] = Field(default=[], description="키워드 목록")
-    insert_at: int = Field(..., ge=0, description="삽입할 인덱스 위치")
+    order: float = Field(..., description="블록 순서 (Fractional indexing)")
 
 
 class KeywordExtractRequest(BaseModel):
@@ -104,7 +99,7 @@ class GenerateTextResponse(BaseModel):
     """AI 텍스트 생성 응답 (생성 정보 포함)"""
     id: str
     project_id: str
-    index: int
+    order: float
     text: str
     keywords: Optional[List[str]]
     status: str

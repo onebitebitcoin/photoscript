@@ -135,22 +135,15 @@ export const projectApi = {
   },
 
   /**
-   * 블록 합치기
-   * @param {string} id - 프로젝트 ID
-   * @param {string[]} blockIds - 합칠 블록 ID 목록
-   */
-  mergeBlocks: (id, blockIds) => api.post(`/projects/${id}/blocks/merge`, { block_ids: blockIds }),
-
-  /**
    * 프로젝트의 블록 목록 조회
    * @param {string} id - 프로젝트 ID
    */
   getBlocks: (id) => api.get(`/projects/${id}/blocks`),
 
   /**
-   * 새 블록 생성
+   * 새 블록 생성 (Fractional Indexing)
    * @param {string} id - 프로젝트 ID
-   * @param {Object} data - { text?, keywords?, insert_at }
+   * @param {Object} data - { text?, keywords?, order }
    */
   createBlock: (id, data) => api.post(`/projects/${id}/blocks`, data),
 }

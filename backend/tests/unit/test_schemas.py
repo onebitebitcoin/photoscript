@@ -14,7 +14,6 @@ from app.schemas.block import (
     BlockCreate,
     BlockUpdate,
     BlockSplitRequest,
-    BlockMergeRequest,
     BlockSearchRequest,
 )
 
@@ -53,34 +52,35 @@ class TestGenerateTextRequest:
 
 
 class TestBlockCreate:
-    """BlockCreate 스키마 테스트"""
+    """BlockCreate 스키마 테스트 (Fractional Indexing)"""
 
     def test_valid_block_create(self):
         """유효한 블록 생성 요청"""
         request = BlockCreate(
             text="테스트 텍스트",
             keywords=["키워드1", "키워드2"],
-            insert_at=0
+            order=1.5
         )
         assert request.text == "테스트 텍스트"
         assert request.keywords == ["키워드1", "키워드2"]
-        assert request.insert_at == 0
+        assert request.order == 1.5
 
     def test_block_create_with_empty_text(self):
         """빈 텍스트로 블록 생성 (허용)"""
-        request = BlockCreate(text="", insert_at=0)
+        request = BlockCreate(text="", order=1.0)
         assert request.text == ""
 
-    def test_block_create_default_values(self):
-        """기본값 확인"""
-        request = BlockCreate(insert_at=5)
+    def test_block_create_with_float_order(self):
+        """소수점 order로 블록 생성 (Fractional Indexing)"""
+        request = BlockCreate(order=1.25)
+        assert request.order == 1.25
         assert request.text == ""
         assert request.keywords == []
 
-    def test_invalid_negative_insert_at(self):
-        """음수 insert_at은 에러"""
+    def test_order_required(self):
+        """order는 필수"""
         with pytest.raises(ValidationError):
-            BlockCreate(insert_at=-1)
+            BlockCreate(text="테스트")
 
 
 class TestBlockUpdate:
@@ -128,30 +128,6 @@ class TestBlockSplitRequest:
         """음수 위치는 에러"""
         with pytest.raises(ValidationError):
             BlockSplitRequest(split_position=-5)
-
-
-class TestBlockMergeRequest:
-    """BlockMergeRequest 스키마 테스트"""
-
-    def test_valid_merge_two_blocks(self):
-        """2개 블록 합치기"""
-        request = BlockMergeRequest(block_ids=["id1", "id2"])
-        assert len(request.block_ids) == 2
-
-    def test_valid_merge_multiple_blocks(self):
-        """여러 블록 합치기"""
-        request = BlockMergeRequest(block_ids=["id1", "id2", "id3", "id4"])
-        assert len(request.block_ids) == 4
-
-    def test_invalid_single_block(self):
-        """1개 블록은 에러"""
-        with pytest.raises(ValidationError):
-            BlockMergeRequest(block_ids=["id1"])
-
-    def test_invalid_too_many_blocks(self):
-        """6개 이상 블록은 에러"""
-        with pytest.raises(ValidationError):
-            BlockMergeRequest(block_ids=["id1", "id2", "id3", "id4", "id5", "id6"])
 
 
 class TestBlockSearchRequest:

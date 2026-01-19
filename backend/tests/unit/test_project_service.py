@@ -113,10 +113,10 @@ class TestDeleteProject:
         db_session.commit()
         db_session.refresh(project)
 
-        # 블록 추가
+        # 블록 추가 (Fractional indexing)
         block = Block(
             project_id=project.id,
-            index=0,
+            order=1.0,
             text="블록 텍스트",
             keywords=["키워드"],
             status=BlockStatus.DRAFT
