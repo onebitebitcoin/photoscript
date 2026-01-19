@@ -245,7 +245,8 @@ class AssetService:
     def delete_block_assets(
         self,
         db: Session,
-        block_id: str
+        block_id: str,
+        auto_commit: bool = False
     ) -> int:
         """
         블록의 모든 에셋 연결 삭제
@@ -253,6 +254,7 @@ class AssetService:
         Args:
             db: DB 세션
             block_id: 블록 ID
+            auto_commit: True면 자동 커밋 (기본값 False - 호출자가 트랜잭션 관리)
 
         Returns:
             int: 삭제된 연결 수
@@ -260,7 +262,9 @@ class AssetService:
         deleted_count = db.query(BlockAsset).filter(
             BlockAsset.block_id == block_id
         ).delete()
-        db.commit()
+
+        if auto_commit:
+            db.commit()
 
         logger.debug(f"블록 에셋 연결 삭제: block_id={block_id}, count={deleted_count}")
         return deleted_count

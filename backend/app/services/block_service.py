@@ -141,30 +141,39 @@ class BlockService:
         블록 삭제
 
         삭제 후 후속 블록들의 인덱스 재정렬
+        단일 트랜잭션으로 처리하여 데이터 일관성 보장
         """
-        block = self.get_block(db, block_id)
-        project_id = block.project_id
-        deleted_index = block.index
+        try:
+            block = self.get_block(db, block_id)
+            project_id = block.project_id
+            deleted_index = block.index
 
-        # 에셋 연결 삭제
-        self.asset_service.delete_block_assets(db, block_id)
+            # Step 1: 에셋 연결 삭제 (커밋 없이)
+            self.asset_service.delete_block_assets(db, block_id, auto_commit=False)
 
-        # 블록 삭제
-        db.delete(block)
-        db.commit()
+            # Step 2: 블록 삭제
+            db.delete(block)
+            db.flush()  # 블록 삭제를 먼저 반영하여 인덱스 재정렬 시 충돌 방지
 
-        # 후속 블록들 인덱스 재정렬
-        subsequent_blocks = db.query(Block).filter(
-            Block.project_id == project_id,
-            Block.index > deleted_index
-        ).order_by(Block.index).all()
+            # Step 3: 후속 블록들 인덱스 재정렬
+            # 오름차순으로 정렬하여 순차적으로 인덱스 감소
+            subsequent_blocks = db.query(Block).filter(
+                Block.project_id == project_id,
+                Block.index > deleted_index
+            ).order_by(Block.index).all()
 
-        for b in subsequent_blocks:
-            b.index -= 1
+            for b in subsequent_blocks:
+                b.index -= 1
+                db.flush()  # 각 블록을 즉시 flush하여 UniqueConstraint 충돌 방지
 
-        db.commit()
+            # 단일 트랜잭션으로 커밋
+            db.commit()
 
-        logger.info(f"블록 삭제: block_id={block_id}")
+            logger.info(f"블록 삭제: block_id={block_id}")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"블록 삭제 실패: {str(e)}", exc_info=True)
+            raise
 
     # ==========================================================================
     # 분할/합치기
@@ -305,8 +314,10 @@ class BlockService:
 
         # 나머지 블록 삭제
         for block in blocks[1:]:
-            self.asset_service.delete_block_assets(db, block.id)
+            self.asset_service.delete_block_assets(db, block.id, auto_commit=False)
             db.delete(block)
+
+        db.flush()  # 삭제를 먼저 반영하여 인덱스 재정렬 시 충돌 방지
 
         # 인덱스 재정렬
         remaining_blocks = db.query(Block).filter(
@@ -315,6 +326,7 @@ class BlockService:
 
         for new_idx, block in enumerate(remaining_blocks):
             block.index = new_idx
+            db.flush()  # 각 블록을 즉시 flush하여 UniqueConstraint 충돌 방지
 
         db.commit()
         db.refresh(first_block)
