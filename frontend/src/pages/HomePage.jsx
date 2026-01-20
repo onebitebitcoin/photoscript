@@ -152,7 +152,7 @@ function HomePage() {
         {/* 헤더 */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">PhotoScript</h1>
+            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
             {user && (
               <span className="text-sm text-gray-400">{user.nickname}</span>
             )}
@@ -160,10 +160,19 @@ function HomePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowNewScript(!showNewScript)}
-              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors"
-              title={showNewScript ? '취소' : '새 스크립트'}
+              className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors"
             >
-              {showNewScript ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+              {showNewScript ? (
+                <>
+                  <X className="w-4 h-4" />
+                  <span className="hidden sm:inline text-sm">취소</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline text-sm">새 스크립트</span>
+                </>
+              )}
             </button>
             <button
               onClick={() => {
