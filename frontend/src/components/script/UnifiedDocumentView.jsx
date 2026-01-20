@@ -76,13 +76,13 @@ function UnifiedDocumentView({ blocks, projectId }) {
     <div className="max-w-3xl mx-auto px-2 md:px-6 py-6">
       {/* 상단 버튼 영역 */}
       <div className="mb-6 space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap overflow-x-auto pb-1">
           {viewMode === 'script' ? (
             <>
               <button
                 onClick={handleCopy}
                 disabled={isCopying}
-                className="flex items-center gap-2 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
               >
                 {isCopying ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -94,7 +94,7 @@ function UnifiedDocumentView({ blocks, projectId }) {
               <button
                 onClick={handleQA}
                 disabled={isQALoading}
-                className="flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap flex-shrink-0"
               >
                 {isQALoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -105,7 +105,7 @@ function UnifiedDocumentView({ blocks, projectId }) {
               </button>
               <button
                 onClick={handleViewVersions}
-                className="flex items-center gap-2 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors whitespace-nowrap flex-shrink-0"
               >
                 <History className="w-4 h-4" />
                 <span className="text-sm">이전 버전</span>
@@ -114,7 +114,7 @@ function UnifiedDocumentView({ blocks, projectId }) {
           ) : (
             <button
               onClick={handleBackToScript}
-              className="flex items-center gap-2 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors whitespace-nowrap"
             >
               <span className="text-sm">← 스크립트 보기</span>
             </button>

@@ -511,27 +511,27 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
       {/* 선택된 버전 상세 보기 */}
       {selectedVersion && (
         <div className="mt-6 pt-6 border-t border-dark-border">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-gray-200">
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <h3 className="text-sm sm:text-base font-semibold text-gray-200 min-w-0 truncate">
               v{selectedVersion.version_number} 스크립트
             </h3>
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2 flex-shrink-0">
               <button
                 onClick={() => handleCopyScript(selectedVersion.corrected_script)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm whitespace-nowrap"
               >
                 <Copy className="w-3 h-3" />
-                <span>복사</span>
+                <span className="hidden xs:inline">복사</span>
               </button>
               <button
                 onClick={() => setSelectedVersion(null)}
-                className="px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+                className="px-2 sm:px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm whitespace-nowrap"
               >
                 닫기
               </button>
             </div>
           </div>
-          <pre className="bg-dark-bg p-4 rounded-lg border border-dark-border overflow-x-auto text-sm text-gray-200 whitespace-pre-wrap">
+          <pre className="bg-dark-bg p-4 rounded-lg border border-dark-border overflow-x-auto text-sm text-gray-200 whitespace-pre-wrap break-words">
             {selectedVersion.corrected_script}
           </pre>
         </div>

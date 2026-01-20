@@ -135,7 +135,7 @@ function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="min-h-screen bg-dark-bg overflow-x-hidden">
       {isCreating && (
         <LoadingOverlay
           message="스크립트 분석 중..."
@@ -150,17 +150,17 @@ function HomePage() {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 헤더 */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <div className="flex items-center justify-between gap-2 mb-8">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">Dashboard</h1>
             {user && (
-              <span className="text-sm text-gray-400">{user.nickname}</span>
+              <span className="text-sm text-gray-400 hidden sm:inline">{user.nickname}</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             <button
               onClick={() => setShowNewScript(!showNewScript)}
-              className="flex items-center gap-2 px-3 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors whitespace-nowrap"
             >
               {showNewScript ? (
                 <>
@@ -179,7 +179,7 @@ function HomePage() {
                 logout()
                 navigate('/login')
               }}
-              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors flex-shrink-0"
               title="로그아웃"
             >
               <LogOut className="w-5 h-5" />

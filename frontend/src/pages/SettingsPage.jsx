@@ -94,7 +94,7 @@ function SettingsPage() {
   const isUsingDefault = !customGuideline
 
   return (
-    <div className="min-h-screen bg-dark-bg p-4 md:p-6">
+    <div className="min-h-screen bg-dark-bg p-4 md:p-6 overflow-x-hidden">
       <div className="max-w-4xl mx-auto">
         {/* 헤더 */}
         <div className="mb-6">
@@ -105,8 +105,8 @@ function SettingsPage() {
         </div>
 
         {/* QA 가이드라인 섹션 */}
-        <div className="bg-dark-card border border-dark-border rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-dark-card border border-dark-border rounded-lg p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="text-lg font-semibold text-gray-100">
                 QA 가이드라인
@@ -118,10 +118,10 @@ function SettingsPage() {
 
             <button
               onClick={() => setShowDefaultPreview(!showDefaultPreview)}
-              className="flex items-center gap-2 px-3 py-2 text-sm bg-dark-hover border border-dark-border rounded-lg hover:bg-dark-card transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm bg-dark-hover border border-dark-border rounded-lg hover:bg-dark-card transition-colors whitespace-nowrap self-start sm:self-auto"
             >
               <Eye className="w-4 h-4" />
-              기본 가이드라인 {showDefaultPreview ? '숨기기' : '보기'}
+              <span>기본 가이드라인 {showDefaultPreview ? '숨기기' : '보기'}</span>
             </button>
           </div>
 
@@ -159,23 +159,23 @@ function SettingsPage() {
           </div>
 
           {/* 액션 버튼 */}
-          <div className="flex items-center gap-3 mt-6">
+          <div className="flex items-center gap-2 sm:gap-3 mt-6 flex-wrap">
             <button
               onClick={handleSave}
               disabled={!hasChanges || isSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <Save className="w-4 h-4" />
-              {isSaving ? '저장 중...' : '저장'}
+              <span className="text-sm sm:text-base">{isSaving ? '저장 중...' : '저장'}</span>
             </button>
 
             <button
               onClick={handleReset}
               disabled={isUsingDefault || isSaving}
-              className="flex items-center gap-2 px-4 py-2 bg-dark-hover border border-dark-border text-gray-300 rounded-lg hover:bg-dark-card transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-dark-hover border border-dark-border text-gray-300 rounded-lg hover:bg-dark-card transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
               <RotateCcw className="w-4 h-4" />
-              초기화
+              <span className="text-sm sm:text-base">초기화</span>
             </button>
           </div>
         </div>

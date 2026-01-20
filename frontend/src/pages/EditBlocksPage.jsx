@@ -241,23 +241,23 @@ function EditBlocksPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-dark-bg">
+    <div className="flex-1 flex flex-col bg-dark-bg overflow-x-hidden">
       {/* 상단 바 */}
-      <div className="bg-dark-card border-b border-dark-border px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="bg-dark-card border-b border-dark-border px-2 sm:px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
               onClick={() => navigate('/')}
-              className="p-1.5 hover:bg-dark-hover rounded transition-colors"
+              className="p-1.5 hover:bg-dark-hover rounded transition-colors flex-shrink-0"
             >
               <ArrowLeft className="w-5 h-5 text-gray-400" />
             </button>
-            <h1 className="text-lg font-semibold text-white truncate">
+            <h1 className="text-base sm:text-lg font-semibold text-white truncate">
               {project?.title || '제목 없음'}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* 모드 전환 버튼 */}
             <Button
               variant="outline"
@@ -277,7 +277,7 @@ function EditBlocksPage() {
               onClick={handleGenerateVisuals}
               icon={Sparkles}
             >
-              비주얼 생성
+              <span className="hidden xs:inline">비주얼 생성</span>
             </Button>
           </div>
         </div>
