@@ -335,7 +335,11 @@ function EditBlocksPage() {
           </div>
         ) : (
           // 통합 문서 보기 모드
-          <UnifiedDocumentView blocks={blocks} projectId={projectId} />
+          <UnifiedDocumentView
+            blocks={blocks}
+            projectId={projectId}
+            projectTitle={project?.title}
+          />
         )}
       </div>
     </div>

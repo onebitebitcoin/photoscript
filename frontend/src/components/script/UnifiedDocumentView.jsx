@@ -11,7 +11,7 @@ import logger from '../../utils/logger'
  * 모든 블록을 하나의 문서로 합쳐서 표시 (읽기 전용)
  * 복사 기능 및 QA 검증 기능 포함
  */
-function UnifiedDocumentView({ blocks, projectId }) {
+function UnifiedDocumentView({ blocks, projectId, projectTitle }) {
   const [isCopying, setIsCopying] = useState(false)
   const [isQALoading, setIsQALoading] = useState(false)
   const [viewMode, setViewMode] = useState('script') // 'script' | 'qa' | 'versions'
@@ -202,10 +202,10 @@ function UnifiedDocumentView({ blocks, projectId }) {
         </div>
       ) : viewMode === 'qa' ? (
         // QA 결과 보기
-        <QAResultView qaResult={qaResult} projectId={projectId} />
+        <QAResultView qaResult={qaResult} projectId={projectId} originalTitle={projectTitle} />
       ) : (
         // 이전 버전 목록 보기
-        <QAResultView qaResult={null} projectId={projectId} initialTab="versions" />
+        <QAResultView qaResult={null} projectId={projectId} originalTitle={projectTitle} initialTab="versions" />
       )}
     </div>
   )

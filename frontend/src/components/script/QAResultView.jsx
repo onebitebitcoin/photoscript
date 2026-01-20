@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle, CheckCircle, Copy, Loader2, FileText, ListChecks, FileCode, GitCompare, History, Edit2, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Copy, Loader2, FileText, ListChecks, FileCode, GitCompare, History, Edit2, Trash2, FilePlus } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import ReactDiffViewer from 'react-diff-viewer-continued'
 import toast from 'react-hot-toast'
 import logger from '../../utils/logger'
 import { projectApi } from '../../services/api'
@@ -8,7 +10,7 @@ import { projectApi } from '../../services/api'
  * QA 결과 표시 컴포넌트
  * 5개 탭: 진단, 구조 점검, 보정 스크립트, 변경 로그, 버전 목록
  */
-function QAResultView({ qaResult, projectId, initialTab = 'diagnosis' }) {
+function QAResultView({ qaResult, projectId, originalTitle, initialTab = 'diagnosis' }) {
   const [activeTab, setActiveTab] = useState(initialTab)
   const [isCopyingCorrected, setIsCopyingCorrected] = useState(false)
   const [versions, setVersions] = useState([])
@@ -98,6 +100,8 @@ function QAResultView({ qaResult, projectId, initialTab = 'diagnosis' }) {
             correctedScript={qaResult.corrected_script}
             isCopying={isCopyingCorrected}
             onCopy={handleCopyCorrected}
+            projectId={projectId}
+            originalTitle={originalTitle}
           />
         )}
         {activeTab === 'changelog' && qaResult && <ChangeLogTab changeLogs={qaResult.change_logs} />}
@@ -238,24 +242,99 @@ function StructureTab({ structureCheck }) {
 /**
  * 보정 스크립트 탭
  */
-function CorrectedScriptTab({ correctedScript, isCopying, onCopy }) {
+function CorrectedScriptTab({ correctedScript, isCopying, onCopy, projectId, originalTitle }) {
+  const navigate = useNavigate()
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
+
+  const handleCreateNewProject = async () => {
+    try {
+      setIsCreatingProject(true)
+
+      // 1. 새 프로젝트 생성
+      const newTitle = originalTitle
+        ? `${originalTitle} (QA 보정)`
+        : `QA 보정 - ${new Date().toLocaleDateString('ko-KR')}`
+
+      toast.loading('새 프로젝트 생성 중...', { id: 'create-qa-project' })
+
+      const { data: newProject } = await projectApi.create({
+        script_raw: correctedScript,
+        title: newTitle
+      })
+
+      logger.info('New project created from corrected script', {
+        projectId: newProject.id,
+        originalProjectId: projectId
+      })
+
+      // 2. 블록 자동 분할
+      toast.loading('스크립트 분석 중...', { id: 'create-qa-project' })
+      await projectApi.split(newProject.id)
+
+      logger.info('QA corrected project split completed', {
+        projectId: newProject.id
+      })
+
+      // 3. 성공 메시지
+      toast.success('새 프로젝트가 생성되었습니다!', {
+        id: 'create-qa-project'
+      })
+
+      // 4. 편집 페이지로 이동
+      navigate(`/project/${newProject.id}/edit`)
+
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`프로젝트 생성 실패: ${message}`, {
+        id: 'create-qa-project'
+      })
+      logger.error('Failed to create QA corrected project', {
+        error: message,
+        projectId
+      })
+    } finally {
+      setIsCreatingProject(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* 복사 버튼 */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-gray-200">가이드라인에 맞게 보정된 최종 스크립트</h3>
-        <button
-          onClick={onCopy}
-          disabled={isCopying}
-          className="flex items-center gap-2 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isCopying ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Copy className="w-4 h-4" />
-          )}
-          <span className="text-sm">복사</span>
-        </button>
+      {/* 헤더 및 버튼 */}
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
+        <h3 className="text-sm sm:text-base font-semibold text-gray-200">
+          가이드라인에 맞게 보정된 최종 스크립트
+        </h3>
+
+        <div className="flex gap-2 flex-shrink-0">
+          {/* 복사 버튼 */}
+          <button
+            onClick={onCopy}
+            disabled={isCopying}
+            className="flex items-center gap-1.5 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 text-sm"
+          >
+            {isCopying ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+            <span>복사</span>
+          </button>
+
+          {/* 새 프로젝트 생성 버튼 */}
+          <button
+            onClick={handleCreateNewProject}
+            disabled={isCreatingProject}
+            className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 text-sm font-medium"
+          >
+            {isCreatingProject ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FilePlus className="w-4 h-4" />
+            )}
+            <span className="hidden xs:inline">새 프로젝트 생성</span>
+            <span className="xs:hidden">생성</span>
+          </button>
+        </div>
       </div>
 
       {/* 보정 스크립트 텍스트 */}
@@ -314,6 +393,23 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
   const [editForm, setEditForm] = useState({ version_name: '', memo: '' })
   const [selectedVersion, setSelectedVersion] = useState(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+
+  // Diff 비교 관련 상태
+  const [comparisonMode, setComparisonMode] = useState(false)
+  const [selectedVersions, setSelectedVersions] = useState([]) // 최대 2개
+  const [diffData, setDiffData] = useState(null) // { old, new }
+  const [isLoadingDiff, setIsLoadingDiff] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  // 모바일 감지
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // 버전 상세 보기
   const handleView = async (versionId) => {
@@ -392,6 +488,62 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
     }
   }
 
+  // 버전 선택 토글 (Diff 비교용)
+  const handleToggleVersion = (versionId) => {
+    setSelectedVersions(prev => {
+      if (prev.includes(versionId)) {
+        return prev.filter(id => id !== versionId)
+      } else {
+        if (prev.length >= 2) {
+          toast.error('최대 2개 버전만 선택 가능합니다')
+          return prev
+        }
+        return [...prev, versionId]
+      }
+    })
+  }
+
+  // Diff 비교 실행
+  const handleCompare = async () => {
+    if (selectedVersions.length !== 2) {
+      toast.error('2개의 버전을 선택해주세요')
+      return
+    }
+
+    try {
+      setIsLoadingDiff(true)
+
+      const [response1, response2] = await Promise.all([
+        projectApi.getQAVersion(projectId, selectedVersions[0]),
+        projectApi.getQAVersion(projectId, selectedVersions[1])
+      ])
+
+      const [oldData, newData] = response1.data.version_number < response2.data.version_number
+        ? [response1.data, response2.data]
+        : [response2.data, response1.data]
+
+      setDiffData({ old: oldData, new: newData })
+      logger.info('Diff comparison loaded', {
+        oldVersion: oldData.version_number,
+        newVersion: newData.version_number
+      })
+
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`비교 데이터 로드 실패: ${message}`)
+      logger.error('Failed to load diff data', { error: message })
+    } finally {
+      setIsLoadingDiff(false)
+    }
+  }
+
+  // Diff 닫기
+  const handleCloseDiff = () => {
+    setDiffData(null)
+    setSelectedVersions([])
+    setComparisonMode(false)
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center py-12">
@@ -410,6 +562,24 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
 
   return (
     <div className="space-y-4">
+      {/* 헤더: 버전 비교 토글 */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-200">버전 목록</h3>
+        <button
+          onClick={() => {
+            setComparisonMode(!comparisonMode)
+            if (comparisonMode) {
+              setSelectedVersions([])
+              setDiffData(null)
+            }
+          }}
+          className="flex items-center gap-2 px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+        >
+          <GitCompare className="w-4 h-4" />
+          <span>{comparisonMode ? '비교 취소' : '버전 비교'}</span>
+        </button>
+      </div>
+
       {/* 버전 목록 */}
       {versions.map((version, index) => (
         <div
@@ -458,9 +628,26 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
             </div>
           ) : (
             // 보기 모드
-            <div>
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1">
+            <div className="flex gap-3">
+              {/* 체크박스 (비교 모드일 때만 표시) */}
+              {comparisonMode && (
+                <div className="flex-shrink-0 pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedVersions.includes(version.id)}
+                    onChange={() => handleToggleVersion(version.id)}
+                    disabled={
+                      !selectedVersions.includes(version.id) &&
+                      selectedVersions.length >= 2
+                    }
+                    className="w-4 h-4 rounded border-dark-border bg-dark-bg text-primary focus:ring-2 focus:ring-primary/50"
+                  />
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-gray-200">
                       v{version.version_number}
@@ -517,10 +704,78 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
                   </button>
                 </div>
               </div>
+              </div>
             </div>
           )}
         </div>
       ))}
+
+      {/* 비교하기 버튼 (2개 선택 시) */}
+      {comparisonMode && selectedVersions.length === 2 && (
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={handleCompare}
+            disabled={isLoadingDiff}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors disabled:opacity-50 font-medium"
+          >
+            {isLoadingDiff ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <GitCompare className="w-4 h-4" />
+            )}
+            <span>비교하기</span>
+          </button>
+        </div>
+      )}
+
+      {/* Diff 뷰어 */}
+      {diffData && (
+        <div className="mt-6 pt-6 border-t border-dark-border">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-200">
+              v{diffData.old.version_number} vs v{diffData.new.version_number}
+            </h3>
+            <button
+              onClick={handleCloseDiff}
+              className="px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+            >
+              닫기
+            </button>
+          </div>
+
+          <ReactDiffViewer
+            oldValue={diffData.old.corrected_script}
+            newValue={diffData.new.corrected_script}
+            splitView={!isMobile}
+            showDiffOnly={false}
+            useDarkTheme={true}
+            styles={{
+              variables: {
+                dark: {
+                  diffViewerBackground: '#1a1b26',
+                  diffViewerColor: '#e2e8f0',
+                  addedBackground: '#10b98114',
+                  addedColor: '#34d399',
+                  removedBackground: '#ef444414',
+                  removedColor: '#f87171',
+                  wordAddedBackground: '#10b98128',
+                  wordRemovedBackground: '#ef444428',
+                  addedGutterBackground: '#10b98120',
+                  removedGutterBackground: '#ef444420',
+                  gutterBackground: '#0f111a',
+                  gutterBackgroundDark: '#0f111a',
+                  highlightBackground: '#374151',
+                  highlightGutterBackground: '#374151',
+                },
+              },
+              line: {
+                padding: '8px 2px',
+                fontSize: '14px',
+              },
+            }}
+          />
+        </div>
+      )}
 
       {/* 선택된 버전 상세 보기 */}
       {selectedVersion && (
