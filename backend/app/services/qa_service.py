@@ -152,7 +152,7 @@ async def validate_and_correct_script(
         response = await client.responses.create(
             model="gpt-5-mini",
             input=combined_prompt,
-            max_output_tokens=8000  # 한국어 약 3000단어 (1500단어 이상 충분히 커버)
+            max_output_tokens=128000  # 최대 출력 토큰 (한국어 약 50,000단어 이상)
         )
 
         content = response.output_text.strip()
