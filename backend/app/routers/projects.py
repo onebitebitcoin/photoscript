@@ -4,7 +4,7 @@ from typing import List
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models import Project, Block, Asset, BlockAsset
+from app.models import Project, Block, Asset, BlockAsset, QAVersion
 from app.models.user import User
 from app.models.block import BlockStatus
 from app.schemas import (
@@ -18,10 +18,13 @@ from app.schemas import (
     SplitResponse,
     MatchOptions,
     MatchResponse,
-    BlockCreate
+    BlockCreate,
+    QAVersionResponse,
+    QAVersionListItem,
+    QAVersionUpdate
 )
 from app.schemas.project import BlockSummary, AssetSummary, QAScriptResponse, QAScriptRequest
-from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block, validate_and_correct_script, QAServiceError
+from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block, validate_and_correct_script, QAServiceError, QAVersionService
 from app.services.asset_service import AssetService
 from app.services.block_service import BlockService
 from app.services.project_service import ProjectService
@@ -34,6 +37,7 @@ settings = get_settings()
 asset_service = AssetService()
 block_service = BlockService()
 project_service = ProjectService()
+qa_version_service = QAVersionService()
 
 
 @router.get("", response_model=List[ProjectResponse])
@@ -467,7 +471,7 @@ async def create_block(
 @router.post("/{project_id}/qa-script", response_model=QAScriptResponse)
 async def qa_script_validation(
     project_id: str,
-    request: QAScriptRequest = None,
+    request: QAScriptRequest = QAScriptRequest(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -482,24 +486,34 @@ async def qa_script_validation(
     if not project:
         raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
 
-    # 2. 블록들을 order 순으로 조회
-    blocks = db.query(Block).filter(
-        Block.project_id == project_id
-    ).order_by(Block.order).all()
+    # 2. 최신 버전의 보정 스크립트가 있으면 사용, 없으면 원본 블록 사용
+    latest_script = qa_version_service.get_latest_corrected_script(db, project_id)
 
-    if not blocks:
-        raise HTTPException(
-            status_code=400,
-            detail={"message": "스크립트에 블록이 없습니다. 먼저 블록을 생성해주세요."}
-        )
+    if latest_script:
+        full_script = latest_script
+        logger.info(f"최신 버전 스크립트 사용: {len(full_script)}자")
+    else:
+        # 블록들을 order 순으로 조회
+        blocks = db.query(Block).filter(
+            Block.project_id == project_id
+        ).order_by(Block.order).all()
 
-    # 3. 블록 텍스트를 하나의 스크립트로 결합
-    full_script = "\n\n".join([block.text for block in blocks])
-    logger.info(f"통합 스크립트 생성: {len(blocks)}개 블록, {len(full_script)}자")
+        if not blocks:
+            raise HTTPException(
+                status_code=400,
+                detail={"message": "스크립트에 블록이 없습니다. 먼저 블록을 생성해주세요."}
+            )
 
-    # 4. QA 서비스 호출
+        # 블록 텍스트를 하나의 스크립트로 결합
+        full_script = "\n\n".join([block.text for block in blocks])
+        logger.info(f"원본 블록 스크립트 사용: {len(blocks)}개 블록, {len(full_script)}자")
+
+    # 3. QA 서비스 호출 (추가 프롬프트 포함)
     try:
-        qa_result = await validate_and_correct_script(full_script)
+        qa_result = await validate_and_correct_script(
+            full_script,
+            additional_prompt=request.additional_prompt
+        )
     except QAServiceError as e:
         logger.error(f"QA 검증 실패: {e}")
         raise HTTPException(
@@ -507,5 +521,137 @@ async def qa_script_validation(
             detail={"message": f"QA 검증 실패: {str(e)}"}
         )
 
+    # 4. 검증 성공 시 자동으로 버전 저장
+    try:
+        qa_version_service.create_version(
+            db=db,
+            project_id=project_id,
+            corrected_script=qa_result.corrected_script,
+            model=qa_result.model
+        )
+        logger.info(f"QA 버전 자동 저장 완료: project_id={project_id}")
+    except Exception as e:
+        logger.warning(f"QA 버전 저장 실패 (경고만): {e}")
+
     logger.info(f"QA 검증 완료: project_id={project_id}")
     return qa_result
+
+
+# ==========================================================================
+# QA 버전 관리 API
+# ==========================================================================
+
+@router.get("/{project_id}/qa-versions", response_model=List[QAVersionListItem])
+async def get_qa_versions(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """QA 버전 목록 조회 (스크립트 제외)"""
+    logger.info(f"QA 버전 목록 조회: project_id={project_id}, user_id={current_user.id}")
+
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    versions = qa_version_service.get_versions(db, project_id)
+    logger.info(f"QA 버전 목록 조회 완료: {len(versions)}개")
+    return versions
+
+
+@router.get("/{project_id}/qa-versions/{version_id}", response_model=QAVersionResponse)
+async def get_qa_version(
+    project_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """QA 버전 상세 조회 (스크립트 포함)"""
+    logger.info(f"QA 버전 상세 조회: project_id={project_id}, version_id={version_id}")
+
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    version = qa_version_service.get_version_by_id(db, version_id)
+    if not version or version.project_id != project_id:
+        raise HTTPException(status_code=404, detail={"message": "버전을 찾을 수 없습니다"})
+
+    logger.info(f"QA 버전 상세 조회 완료: version_id={version_id}")
+    return version
+
+
+@router.put("/{project_id}/qa-versions/{version_id}", response_model=QAVersionResponse)
+async def update_qa_version(
+    project_id: str,
+    version_id: str,
+    update_data: QAVersionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """QA 버전 메타데이터 수정 (이름, 메모)"""
+    logger.info(f"QA 버전 수정: project_id={project_id}, version_id={version_id}")
+
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 버전 존재 및 소유권 확인
+    version = qa_version_service.get_version_by_id(db, version_id)
+    if not version or version.project_id != project_id:
+        raise HTTPException(status_code=404, detail={"message": "버전을 찾을 수 없습니다"})
+
+    # 수정
+    updated_version = qa_version_service.update_version(
+        db=db,
+        version_id=version_id,
+        version_name=update_data.version_name,
+        memo=update_data.memo
+    )
+
+    logger.info(f"QA 버전 수정 완료: version_id={version_id}")
+    return updated_version
+
+
+@router.delete("/{project_id}/qa-versions/{version_id}")
+async def delete_qa_version(
+    project_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """QA 버전 삭제"""
+    logger.info(f"QA 버전 삭제: project_id={project_id}, version_id={version_id}")
+
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 버전 존재 및 소유권 확인
+    version = qa_version_service.get_version_by_id(db, version_id)
+    if not version or version.project_id != project_id:
+        raise HTTPException(status_code=404, detail={"message": "버전을 찾을 수 없습니다"})
+
+    # 삭제
+    success = qa_version_service.delete_version(db, version_id)
+    if not success:
+        raise HTTPException(status_code=500, detail={"message": "버전 삭제 실패"})
+
+    logger.info(f"QA 버전 삭제 완료: version_id={version_id}")
+    return {"message": "버전이 삭제되었습니다"}

@@ -98,8 +98,12 @@ class MatchResponse(BaseModel):
 
 
 class QAScriptRequest(BaseModel):
-    """QA 검증 요청 (현재는 project_id만으로 충분)"""
-    pass
+    """QA 검증 요청"""
+    additional_prompt: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="추가 프롬프트 (선택사항)"
+    )
 
 
 class DiagnosisSummary(BaseModel):

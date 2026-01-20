@@ -26,6 +26,12 @@ from app.schemas.asset import (
     AssetResponse,
     BlockAssetResponse
 )
+from app.schemas.qa_version import (
+    QAVersionResponse,
+    QAVersionListItem,
+    QAVersionUpdate,
+    QAVersionCreate
+)
 
 __all__ = [
     "ProjectCreate",
@@ -49,5 +55,9 @@ __all__ = [
     "GenerationInfo",
     "GenerateTextResponse",
     "AssetResponse",
-    "BlockAssetResponse"
+    "BlockAssetResponse",
+    "QAVersionResponse",
+    "QAVersionListItem",
+    "QAVersionUpdate",
+    "QAVersionCreate"
 ]

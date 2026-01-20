@@ -150,8 +150,37 @@ export const projectApi = {
   /**
    * 유튜브 스크립트 QA 검증 및 보정
    * @param {string} id - 프로젝트 ID
+   * @param {Object} options - { additional_prompt? }
    */
-  qaScript: (id) => api.post(`/projects/${id}/qa-script`),
+  qaScript: (id, options = {}) => api.post(`/projects/${id}/qa-script`, options),
+
+  /**
+   * QA 버전 목록 조회 (스크립트 제외)
+   * @param {string} id - 프로젝트 ID
+   */
+  getQAVersions: (id) => api.get(`/projects/${id}/qa-versions`),
+
+  /**
+   * QA 버전 상세 조회 (스크립트 포함)
+   * @param {string} projectId - 프로젝트 ID
+   * @param {string} versionId - 버전 ID
+   */
+  getQAVersion: (projectId, versionId) => api.get(`/projects/${projectId}/qa-versions/${versionId}`),
+
+  /**
+   * QA 버전 메타데이터 수정 (이름, 메모)
+   * @param {string} projectId - 프로젝트 ID
+   * @param {string} versionId - 버전 ID
+   * @param {Object} data - { version_name?, memo? }
+   */
+  updateQAVersion: (projectId, versionId, data) => api.put(`/projects/${projectId}/qa-versions/${versionId}`, data),
+
+  /**
+   * QA 버전 삭제
+   * @param {string} projectId - 프로젝트 ID
+   * @param {string} versionId - 버전 ID
+   */
+  deleteQAVersion: (projectId, versionId) => api.delete(`/projects/${projectId}/qa-versions/${versionId}`),
 }
 
 /**

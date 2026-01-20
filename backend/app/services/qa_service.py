@@ -54,12 +54,16 @@ QA_GUIDELINE = """
 """
 
 
-async def validate_and_correct_script(full_script: str) -> QAScriptResponse:
+async def validate_and_correct_script(
+    full_script: str,
+    additional_prompt: str = None
+) -> QAScriptResponse:
     """
     유튜브 스크립트를 QA 검증하고 보정
 
     Args:
         full_script: 전체 스크립트 텍스트
+        additional_prompt: 추가 프롬프트 (선택사항)
 
     Returns:
         QAScriptResponse: 진단, 구조 점검, 보정 스크립트, 변경 로그
@@ -67,7 +71,7 @@ async def validate_and_correct_script(full_script: str) -> QAScriptResponse:
     Raises:
         QAServiceError: QA 검증 실패 시
     """
-    logger.info(f"QA 검증 시작: {len(full_script)}자")
+    logger.info(f"QA 검증 시작: {len(full_script)}자, 추가 프롬프트: {bool(additional_prompt)}")
 
     if not settings.openai_api_key:
         logger.error("OpenAI API 키가 설정되지 않음")
@@ -111,6 +115,10 @@ async def validate_and_correct_script(full_script: str) -> QAScriptResponse:
 - corrected_script는 가이드라인에 맞게 완전히 재작성된 최종 낭독본입니다.
 - change_logs는 원본 대비 주요 변경사항을 블록별로 기록합니다.
 """
+
+    # 추가 프롬프트가 있으면 시스템 프롬프트에 추가
+    if additional_prompt:
+        system_prompt += f"\n\n## 추가 요구사항\n{additional_prompt}\n"
 
     # 시스템 프롬프트와 사용자 프롬프트를 하나로 합침
     combined_prompt = f"""{system_prompt}

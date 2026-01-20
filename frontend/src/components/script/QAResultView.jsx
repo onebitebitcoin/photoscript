@@ -1,15 +1,18 @@
-import { useState } from 'react'
-import { AlertTriangle, CheckCircle, Copy, Loader2, FileText, ListChecks, FileCode, GitCompare } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { AlertTriangle, CheckCircle, Copy, Loader2, FileText, ListChecks, FileCode, GitCompare, History, Edit2, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import logger from '../../utils/logger'
+import { projectApi } from '../../services/api'
 
 /**
  * QA 결과 표시 컴포넌트
- * 4개 탭: 진단, 구조 점검, 보정 스크립트, 변경 로그
+ * 5개 탭: 진단, 구조 점검, 보정 스크립트, 변경 로그, 버전 목록
  */
-function QAResultView({ qaResult }) {
+function QAResultView({ qaResult, projectId }) {
   const [activeTab, setActiveTab] = useState('diagnosis')
   const [isCopyingCorrected, setIsCopyingCorrected] = useState(false)
+  const [versions, setVersions] = useState([])
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false)
 
   if (!qaResult) {
     return (
@@ -19,11 +22,36 @@ function QAResultView({ qaResult }) {
     )
   }
 
+  // 버전 목록 불러오기
+  const loadVersions = async () => {
+    if (!projectId) return
+    try {
+      setIsLoadingVersions(true)
+      const { data } = await projectApi.getQAVersions(projectId)
+      setVersions(data)
+      logger.info('QA versions loaded', { count: data.length })
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`버전 목록 불러오기 실패: ${message}`)
+      logger.error('Failed to load QA versions', { error: message })
+    } finally {
+      setIsLoadingVersions(false)
+    }
+  }
+
+  // 버전 탭 활성화 시 버전 목록 로드
+  useEffect(() => {
+    if (activeTab === 'versions') {
+      loadVersions()
+    }
+  }, [activeTab])
+
   const tabs = [
     { id: 'diagnosis', label: '진단', icon: AlertTriangle },
     { id: 'structure', label: '구조', icon: ListChecks },
     { id: 'corrected', label: '보정 스크립트', icon: FileCode },
     { id: 'changelog', label: '변경 로그', icon: GitCompare },
+    { id: 'versions', label: '버전 목록', icon: History },
   ]
 
   // 보정 스크립트 복사
@@ -76,6 +104,14 @@ function QAResultView({ qaResult }) {
           />
         )}
         {activeTab === 'changelog' && <ChangeLogTab changeLogs={qaResult.change_logs} />}
+        {activeTab === 'versions' && (
+          <VersionsTab
+            projectId={projectId}
+            versions={versions}
+            isLoading={isLoadingVersions}
+            onRefresh={loadVersions}
+          />
+        )}
       </div>
 
       {/* 푸터 (모델 정보) */}
@@ -261,6 +297,246 @@ function ChangeLogTab({ changeLogs }) {
           <span className="text-gray-200 flex-1">{log.description}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/**
+ * 버전 목록 탭
+ */
+function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({ version_name: '', memo: '' })
+  const [selectedVersion, setSelectedVersion] = useState(null)
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false)
+
+  // 버전 상세 보기
+  const handleView = async (versionId) => {
+    try {
+      setIsLoadingDetail(true)
+      const { data } = await projectApi.getQAVersion(projectId, versionId)
+      setSelectedVersion(data)
+      logger.info('QA version detail loaded', { versionId })
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`버전 상세 불러오기 실패: ${message}`)
+      logger.error('Failed to load QA version detail', { error: message })
+    } finally {
+      setIsLoadingDetail(false)
+    }
+  }
+
+  // 편집 모드 활성화
+  const handleEdit = (version) => {
+    setEditingId(version.id)
+    setEditForm({
+      version_name: version.version_name || '',
+      memo: version.memo || ''
+    })
+  }
+
+  // 편집 취소
+  const handleCancel = () => {
+    setEditingId(null)
+    setEditForm({ version_name: '', memo: '' })
+  }
+
+  // 편집 저장
+  const handleSave = async (versionId) => {
+    try {
+      await projectApi.updateQAVersion(projectId, versionId, editForm)
+      toast.success('버전 정보가 수정되었습니다')
+      setEditingId(null)
+      onRefresh()
+      logger.info('QA version updated', { versionId })
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`버전 수정 실패: ${message}`)
+      logger.error('Failed to update QA version', { error: message })
+    }
+  }
+
+  // 버전 삭제
+  const handleDelete = async (versionId) => {
+    if (!confirm('이 버전을 삭제하시겠습니까?')) return
+
+    try {
+      await projectApi.deleteQAVersion(projectId, versionId)
+      toast.success('버전이 삭제되었습니다')
+      if (selectedVersion?.id === versionId) {
+        setSelectedVersion(null)
+      }
+      onRefresh()
+      logger.info('QA version deleted', { versionId })
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`버전 삭제 실패: ${message}`)
+      logger.error('Failed to delete QA version', { error: message })
+    }
+  }
+
+  // 스크립트 복사
+  const handleCopyScript = async (script) => {
+    try {
+      await navigator.clipboard.writeText(script)
+      toast.success('스크립트가 클립보드에 복사되었습니다')
+      logger.info('Version script copied to clipboard')
+    } catch (err) {
+      toast.error('복사 실패')
+      logger.error('Failed to copy version script', { error: err.message })
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!versions?.length) {
+    return (
+      <div className="text-gray-400 text-center py-12">
+        저장된 버전이 없습니다
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 버전 목록 */}
+      {versions.map((version, index) => (
+        <div
+          key={version.id}
+          className="p-4 bg-dark-card border border-dark-border rounded-lg"
+        >
+          {editingId === version.id ? (
+            // 편집 모드
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">버전 이름</label>
+                <input
+                  type="text"
+                  value={editForm.version_name}
+                  onChange={(e) => setEditForm({ ...editForm, version_name: e.target.value })}
+                  placeholder="버전 이름 (선택사항)"
+                  maxLength={255}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">메모</label>
+                <textarea
+                  value={editForm.memo}
+                  onChange={(e) => setEditForm({ ...editForm, memo: e.target.value })}
+                  placeholder="메모 (선택사항)"
+                  rows={3}
+                  maxLength={5000}
+                  className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSave(version.id)}
+                  className="px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary rounded hover:bg-primary/20 transition-colors text-sm"
+                >
+                  저장
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="px-3 py-1.5 bg-dark-hover border border-dark-border text-gray-400 rounded hover:bg-dark-card transition-colors text-sm"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : (
+            // 보기 모드
+            <div>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-semibold text-gray-200">
+                      v{version.version_number}
+                    </span>
+                    {version.version_name && (
+                      <span className="text-sm text-gray-300">
+                        {version.version_name}
+                      </span>
+                    )}
+                    {index === 0 && (
+                      <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded">
+                        최신
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(version.created_at).toLocaleString('ko-KR')} | {version.model}
+                  </div>
+                  {version.memo && (
+                    <div className="mt-2 text-sm text-gray-400">
+                      {version.memo}
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleView(version.id)}
+                    className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors"
+                    title="상세 보기"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleEdit(version)}
+                    className="p-1.5 text-gray-400 hover:text-gray-200 transition-colors"
+                    title="편집"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(version.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                    title="삭제"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* 선택된 버전 상세 보기 */}
+      {selectedVersion && (
+        <div className="mt-6 pt-6 border-t border-dark-border">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-semibold text-gray-200">
+              v{selectedVersion.version_number} 스크립트
+            </h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleCopyScript(selectedVersion.corrected_script)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+              >
+                <Copy className="w-3 h-3" />
+                <span>복사</span>
+              </button>
+              <button
+                onClick={() => setSelectedVersion(null)}
+                className="px-3 py-1.5 bg-dark-card border border-dark-border rounded hover:bg-dark-hover transition-colors text-sm"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+          <pre className="bg-dark-bg p-4 rounded-lg border border-dark-border overflow-x-auto text-sm text-gray-200 whitespace-pre-wrap">
+            {selectedVersion.corrected_script}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }
