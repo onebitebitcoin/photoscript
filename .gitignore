@@ -73,6 +73,8 @@ railway.json
 # Testing
 coverage/
 .nyc_output/
+test_*.py
+test_*.txt
 
 # Temporary files
 tmp/
