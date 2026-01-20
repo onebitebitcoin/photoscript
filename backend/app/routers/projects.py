@@ -508,11 +508,12 @@ async def qa_script_validation(
         full_script = "\n\n".join([block.text for block in blocks])
         logger.info(f"원본 블록 스크립트 사용: {len(blocks)}개 블록, {len(full_script)}자")
 
-    # 3. QA 서비스 호출 (추가 프롬프트 포함)
+    # 3. QA 서비스 호출 (추가 프롬프트 및 커스텀 가이드라인 포함)
     try:
         qa_result = await validate_and_correct_script(
             full_script,
-            additional_prompt=request.additional_prompt
+            additional_prompt=request.additional_prompt,
+            custom_guideline=current_user.qa_custom_guideline
         )
     except QAServiceError as e:
         logger.error(f"QA 검증 실패: {e}")

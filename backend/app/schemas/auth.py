@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -37,6 +38,7 @@ class UserResponse(BaseModel):
     id: str
     nickname: str
     is_active: bool
+    qa_custom_guideline: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -49,3 +51,16 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+
+class UserSettingsUpdate(BaseModel):
+    """사용자 설정 업데이트 요청"""
+    qa_custom_guideline: Optional[str] = Field(None, max_length=10000, description="커스텀 QA 가이드라인 (최대 10,000자)")
+
+
+class UserSettingsResponse(BaseModel):
+    """사용자 설정 응답"""
+    qa_custom_guideline: Optional[str]
+
+    class Config:
+        from_attributes = True

@@ -78,6 +78,27 @@ export const authApi = {
 }
 
 /**
+ * User Settings API
+ */
+export const userApi = {
+  /**
+   * 현재 사용자 설정 조회
+   */
+  getSettings: () => api.get('/auth/me/settings'),
+
+  /**
+   * 사용자 설정 업데이트
+   * @param {Object} settings - { qa_custom_guideline? }
+   */
+  updateSettings: (settings) => api.put('/auth/me/settings', settings),
+
+  /**
+   * 사용자 설정 초기화
+   */
+  resetSettings: () => api.post('/auth/me/settings/reset'),
+}
+
+/**
  * Project API
  */
 export const projectApi = {

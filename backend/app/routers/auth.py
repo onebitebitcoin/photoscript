@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -13,6 +13,8 @@ from app.schemas.auth import (
     CheckNicknameResponse,
     AuthResponse,
     UserResponse,
+    UserSettingsUpdate,
+    UserSettingsResponse,
 )
 from app.services import auth_service
 from app.utils.logger import logger
@@ -124,3 +126,48 @@ async def get_me(
     """현재 사용자 정보 조회"""
     logger.debug(f"Get me: {current_user.nickname}")
     return UserResponse.model_validate(current_user)
+
+
+@router.get("/me/settings", response_model=UserSettingsResponse)
+async def get_user_settings(
+    current_user: User = Depends(get_current_user)
+):
+    """현재 사용자 설정 조회"""
+    logger.debug(f"Get user settings: {current_user.nickname}")
+    return UserSettingsResponse(
+        qa_custom_guideline=current_user.qa_custom_guideline
+    )
+
+
+@router.put("/me/settings", response_model=UserSettingsResponse)
+async def update_user_settings(
+    settings: UserSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """사용자 설정 업데이트"""
+    logger.info(f"Update user settings: {current_user.nickname}")
+
+    current_user.qa_custom_guideline = settings.qa_custom_guideline
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+
+    logger.info(f"User settings updated: {current_user.id}")
+    return UserSettingsResponse(qa_custom_guideline=current_user.qa_custom_guideline)
+
+
+@router.post("/me/settings/reset")
+async def reset_user_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """사용자 설정 초기화 (기본값으로 복원)"""
+    logger.info(f"Reset user settings: {current_user.nickname}")
+
+    current_user.qa_custom_guideline = None
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+
+    logger.info(f"User settings reset: {current_user.id}")
+    return {"message": "설정이 초기화되었습니다"}

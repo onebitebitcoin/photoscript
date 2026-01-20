@@ -30,8 +30,8 @@ class QAServiceError(Exception):
     pass
 
 
-# 유튜브 스크립트 가이드라인
-QA_GUIDELINE = """
+# 기본 유튜브 스크립트 가이드라인 (fallback)
+DEFAULT_QA_GUIDELINE = """
 ## 유튜브 스크립트 작성 가이드라인
 
 ### 필수 규칙 (CRITICAL)
@@ -56,7 +56,8 @@ QA_GUIDELINE = """
 
 async def validate_and_correct_script(
     full_script: str,
-    additional_prompt: str = None
+    additional_prompt: str = None,
+    custom_guideline: str = None
 ) -> QAScriptResponse:
     """
     유튜브 스크립트를 QA 검증하고 보정
@@ -64,6 +65,7 @@ async def validate_and_correct_script(
     Args:
         full_script: 전체 스크립트 텍스트
         additional_prompt: 추가 프롬프트 (선택사항)
+        custom_guideline: 커스텀 QA 가이드라인 (없으면 기본값 사용)
 
     Returns:
         QAScriptResponse: 진단, 구조 점검, 보정 스크립트, 변경 로그
@@ -71,7 +73,7 @@ async def validate_and_correct_script(
     Raises:
         QAServiceError: QA 검증 실패 시
     """
-    logger.info(f"QA 검증 시작: {len(full_script)}자, 추가 프롬프트: {bool(additional_prompt)}")
+    logger.info(f"QA 검증 시작: {len(full_script)}자, 추가 프롬프트: {bool(additional_prompt)}, 커스텀 가이드라인: {bool(custom_guideline)}")
 
     if not settings.openai_api_key:
         logger.error("OpenAI API 키가 설정되지 않음")
@@ -83,10 +85,13 @@ async def validate_and_correct_script(
 
     client = AsyncOpenAI(api_key=settings.openai_api_key)
 
+    # 커스텀 가이드라인이 있으면 사용, 없으면 기본 가이드라인 사용
+    qa_guideline = custom_guideline if custom_guideline else DEFAULT_QA_GUIDELINE
+
     system_prompt = f"""당신은 유튜브 스크립트 QA 전문가입니다.
 스크립트를 분석하여 가이드라인 준수 여부를 점검하고, 보정된 스크립트를 제공합니다.
 
-{QA_GUIDELINE}
+{qa_guideline}
 
 ## 출력 형식 (반드시 JSON으로만 응답)
 {{
