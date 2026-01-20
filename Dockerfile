@@ -56,13 +56,14 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
 
 # Start server with Gunicorn + Uvicorn workers
 # Railway injects PORT env var automatically
-# --timeout-graceful-shutdown: 종료 요청 후 진행 중인 요청 완료 대기 시간
+# --timeout: 워커 프로세스 타임아웃 (QA 검증 등 긴 작업 지원)
+# --graceful-timeout: 종료 요청 후 진행 중인 요청 완료 대기 시간
 # 마이그레이션을 먼저 실행한 후 서버 시작
 CMD ["sh", "-c", "cd backend && python -m migrations.run_all && gunicorn app.main:app \
     --workers ${WORKERS:-2} \
     --worker-class uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:${PORT:-7100} \
-    --timeout 120 \
+    --timeout 600 \
     --graceful-timeout 30 \
     --access-logfile - \
     --error-logfile -"]

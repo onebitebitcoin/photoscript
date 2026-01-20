@@ -3,7 +3,7 @@ import logger from '../utils/logger'
 
 const api = axios.create({
   baseURL: '/api/v1',
-  timeout: 300000, // LLM + Pexels 매칭 시간 고려 (5분)
+  timeout: 600000, // LLM + Pexels 매칭, QA 검증 등 긴 작업 지원 (10분)
 })
 
 // 토큰 저장/조회/삭제
