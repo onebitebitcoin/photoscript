@@ -112,7 +112,10 @@ async def validate_and_correct_script(full_script: str) -> QAScriptResponse:
 - change_logs는 원본 대비 주요 변경사항을 블록별로 기록합니다.
 """
 
-    user_prompt = f"""다음 유튜브 스크립트를 검증하고 보정해주세요:
+    # 시스템 프롬프트와 사용자 프롬프트를 하나로 합침
+    combined_prompt = f"""{system_prompt}
+
+다음 유튜브 스크립트를 검증하고 보정해주세요:
 
 {full_script}
 """
@@ -122,8 +125,7 @@ async def validate_and_correct_script(full_script: str) -> QAScriptResponse:
 
         response = await client.responses.create(
             model="gpt-5-mini",
-            system=system_prompt,
-            input=user_prompt
+            input=combined_prompt
         )
 
         content = response.output_text.strip()
