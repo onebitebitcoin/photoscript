@@ -169,11 +169,25 @@ export const projectApi = {
   createBlock: (id, data) => api.post(`/projects/${id}/blocks`, data),
 
   /**
-   * 유튜브 스크립트 QA 검증 및 보정
+   * 유튜브 스크립트 QA 검증 및 보정 (동기)
    * @param {string} id - 프로젝트 ID
    * @param {Object} options - { additional_prompt? }
    */
   qaScript: (id, options = {}) => api.post(`/projects/${id}/qa-script`, options),
+
+  /**
+   * 유튜브 스크립트 QA 검증 (비동기) - 즉시 task_id 반환
+   * @param {string} id - 프로젝트 ID
+   * @param {Object} options - { additional_prompt? }
+   */
+  qaScriptAsync: (id, options = {}) => api.post(`/projects/${id}/qa-script-async`, options),
+
+  /**
+   * QA 작업 상태 조회
+   * @param {string} projectId - 프로젝트 ID
+   * @param {string} taskId - 작업 ID
+   */
+  getQATaskStatus: (projectId, taskId) => api.get(`/projects/${projectId}/qa-tasks/${taskId}`),
 
   /**
    * QA 버전 목록 조회 (스크립트 제외)

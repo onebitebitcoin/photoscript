@@ -24,10 +24,12 @@ from app.schemas import (
     QAVersionUpdate
 )
 from app.schemas.project import BlockSummary, AssetSummary, QAScriptResponse, QAScriptRequest
+from app.schemas.qa_task import QATaskCreate, QATaskResponse
 from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block, validate_and_correct_script, QAServiceError, QAVersionService
 from app.services.asset_service import AssetService
 from app.services.block_service import BlockService
 from app.services.project_service import ProjectService
+from app.services.qa_task_service import qa_task_service
 from app.errors import ProjectNotFoundError
 from app.config import get_settings
 from app.utils.logger import logger
@@ -658,3 +660,101 @@ async def delete_qa_version(
 
     logger.info(f"QA 버전 삭제 완료: version_id={version_id}")
     return {"message": "버전이 삭제되었습니다"}
+
+
+# ========================================
+# QA 비동기 처리 API
+# ========================================
+
+@router.post("/{project_id}/qa-script-async", response_model=QATaskResponse)
+async def qa_script_validation_async(
+    project_id: str,
+    request: QATaskCreate = QATaskCreate(),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """유튜브 스크립트 QA 검증 (비동기) - 즉시 task_id 반환"""
+    logger.info(f"QA 검증 비동기 시작: project_id={project_id}, user_id={current_user.id}")
+
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 블록 확인
+    blocks = db.query(Block).filter(Block.project_id == project_id).all()
+    if not blocks:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "스크립트에 블록이 없습니다. 먼저 블록을 생성해주세요."}
+        )
+
+    # QA 작업 생성
+    task = qa_task_service.create_task(
+        db=db,
+        project_id=project_id,
+        additional_prompt=request.additional_prompt
+    )
+
+    # 백그라운드에서 QA 검증 시작
+    qa_task_service.start_background_task(task.id)
+
+    logger.info(f"QA 작업 생성 완료: task_id={task.id}")
+    return QATaskResponse(
+        id=task.id,
+        project_id=task.project_id,
+        status=task.status,
+        progress=task.progress,
+        result=None,
+        error_message=None,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        completed_at=None
+    )
+
+
+@router.get("/{project_id}/qa-tasks/{task_id}", response_model=QATaskResponse)
+async def get_qa_task_status(
+    project_id: str,
+    task_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """QA 작업 상태 조회"""
+    # 프로젝트 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 작업 조회
+    task = qa_task_service.get_task(db, task_id)
+    if not task or task.project_id != project_id:
+        raise HTTPException(status_code=404, detail={"message": "작업을 찾을 수 없습니다"})
+
+    # 결과 파싱 (완료된 경우만)
+    result = None
+    if task.status == "completed" and task.result_json:
+        try:
+            import json
+            result_dict = json.loads(task.result_json)
+            result = QAScriptResponse(**result_dict)
+        except Exception as e:
+            logger.error(f"결과 파싱 실패: {e}")
+
+    return QATaskResponse(
+        id=task.id,
+        project_id=task.project_id,
+        status=task.status,
+        progress=task.progress,
+        result=result,
+        error_message=task.error_message,
+        created_at=task.created_at,
+        updated_at=task.updated_at,
+        completed_at=task.completed_at
+    )

@@ -20,6 +20,7 @@ from migrations import m003_change_index_to_order_float
 from migrations import m004_add_qa_versions
 from migrations import m005_add_user_qa_settings
 from migrations import m006_add_qa_version_tokens
+from migrations import m007_create_qa_tasks
 
 
 def run_all_migrations():
@@ -39,6 +40,7 @@ def run_all_migrations():
         ("004", "qa_versions 테이블 생성", m004_add_qa_versions),
         ("005", "users 테이블에 qa_custom_guideline 추가", m005_add_user_qa_settings),
         ("006", "qa_versions 테이블에 input_tokens, output_tokens 추가", m006_add_qa_version_tokens),
+        ("007", "qa_tasks 테이블 생성 (비동기 QA)", m007_create_qa_tasks),
     ]
 
     for num, description, module in migrations:

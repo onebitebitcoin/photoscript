@@ -17,6 +17,8 @@ function UnifiedDocumentView({ blocks, projectId }) {
   const [viewMode, setViewMode] = useState('script') // 'script' | 'qa' | 'versions'
   const [qaResult, setQaResult] = useState(null)
   const [additionalPrompt, setAdditionalPrompt] = useState('')
+  const [qaProgress, setQaProgress] = useState(0)
+  const [qaStatus, setQaStatus] = useState('')
 
   // 복사 핸들러
   const handleCopy = async () => {
@@ -34,21 +36,64 @@ function UnifiedDocumentView({ blocks, projectId }) {
     }
   }
 
-  // QA 검증 핸들러
+  // QA 검증 핸들러 (비동기 패턴)
   const handleQA = async () => {
     try {
       setIsQALoading(true)
+      setQaProgress(0)
+      setQaStatus('작업 생성 중...')
+
       const options = additionalPrompt ? { additional_prompt: additionalPrompt } : {}
-      const { data } = await projectApi.qaScript(projectId, options)
-      setQaResult(data)
-      setViewMode('qa')
-      toast.success('QA 검증 완료 (버전 자동 저장됨)')
-      logger.info('QA validation completed', { projectId, hasAdditionalPrompt: !!additionalPrompt })
+
+      // 1. QA 작업 생성 (즉시 반환)
+      const { data: taskData } = await projectApi.qaScriptAsync(projectId, options)
+      const taskId = taskData.id
+
+      logger.info('QA task created', { taskId, projectId })
+      setQaStatus('QA 검증 진행 중...')
+
+      // 2. 폴링으로 상태 확인 (2초마다)
+      const pollInterval = setInterval(async () => {
+        try {
+          const { data: statusData } = await projectApi.getQATaskStatus(projectId, taskId)
+
+          setQaProgress(statusData.progress)
+
+          if (statusData.status === 'completed') {
+            clearInterval(pollInterval)
+            setQaResult(statusData.result)
+            setViewMode('qa')
+            setIsQALoading(false)
+            toast.success('QA 검증 완료 (버전 자동 저장됨)')
+            logger.info('QA validation completed', { taskId, projectId })
+          } else if (statusData.status === 'failed') {
+            clearInterval(pollInterval)
+            setIsQALoading(false)
+            const errorMsg = statusData.error_message || '알 수 없는 오류'
+            toast.error(`QA 검증 실패: ${errorMsg}`)
+            logger.error('QA validation failed', { taskId, error: errorMsg })
+          } else if (statusData.status === 'running') {
+            setQaStatus(`QA 검증 진행 중... (${statusData.progress}%)`)
+          }
+        } catch (pollErr) {
+          logger.error('Failed to poll QA status', { error: pollErr.message })
+        }
+      }, 2000)
+
+      // 5분 후 타임아웃
+      setTimeout(() => {
+        clearInterval(pollInterval)
+        if (isQALoading) {
+          setIsQALoading(false)
+          toast.error('QA 검증 시간 초과')
+          logger.error('QA validation timeout', { taskId })
+        }
+      }, 300000) // 5분
+
     } catch (err) {
       const message = err.response?.data?.detail?.message || err.message
       toast.error(`QA 검증 실패: ${message}`)
       logger.error('QA validation failed', { projectId, error: message })
-    } finally {
       setIsQALoading(false)
     }
   }
@@ -101,7 +146,9 @@ function UnifiedDocumentView({ blocks, projectId }) {
                 ) : (
                   <FileCheck className="w-4 h-4" />
                 )}
-                <span className="text-sm">QA 검증</span>
+                <span className="text-sm">
+                  {isQALoading ? `${qaStatus} ${qaProgress}%` : 'QA 검증'}
+                </span>
               </button>
               <button
                 onClick={handleViewVersions}
