@@ -7,6 +7,7 @@ from app.services.text_generator import generate_block_text, generate_block_text
 from app.services.asset_service import AssetService
 from app.services.block_service import BlockService
 from app.services.project_service import ProjectService
+from app.services.qa_service import validate_and_correct_script, QAServiceError
 
 __all__ = [
     # 기존 서비스
@@ -25,4 +26,7 @@ __all__ = [
     "AssetService",
     "BlockService",
     "ProjectService",
+    # QA 서비스
+    "validate_and_correct_script",
+    "QAServiceError",
 ]

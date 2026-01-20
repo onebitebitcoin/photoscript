@@ -20,8 +20,8 @@ from app.schemas import (
     MatchResponse,
     BlockCreate
 )
-from app.schemas.project import BlockSummary, AssetSummary
-from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block
+from app.schemas.project import BlockSummary, AssetSummary, QAScriptResponse, QAScriptRequest
+from app.services import process_script, ScriptProcessingError, PexelsClient, match_assets_for_block, validate_and_correct_script, QAServiceError
 from app.services.asset_service import AssetService
 from app.services.block_service import BlockService
 from app.services.project_service import ProjectService
@@ -462,3 +462,50 @@ async def create_block(
 
     logger.info(f"블록 추가 완료: block_id={new_block.id}, order={new_block.order}")
     return new_block
+
+
+@router.post("/{project_id}/qa-script", response_model=QAScriptResponse)
+async def qa_script_validation(
+    project_id: str,
+    request: QAScriptRequest = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """유튜브 스크립트 QA 검증 및 보정 (본인 소유만)"""
+    logger.info(f"QA 검증 시작: project_id={project_id}, user_id={current_user.id}")
+
+    # 1. 프로젝트 조회 및 소유권 확인
+    project = db.query(Project).filter(
+        Project.id == project_id,
+        Project.user_id == current_user.id
+    ).first()
+    if not project:
+        raise HTTPException(status_code=404, detail={"message": "프로젝트를 찾을 수 없습니다"})
+
+    # 2. 블록들을 order 순으로 조회
+    blocks = db.query(Block).filter(
+        Block.project_id == project_id
+    ).order_by(Block.order).all()
+
+    if not blocks:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "스크립트에 블록이 없습니다. 먼저 블록을 생성해주세요."}
+        )
+
+    # 3. 블록 텍스트를 하나의 스크립트로 결합
+    full_script = "\n\n".join([block.text for block in blocks])
+    logger.info(f"통합 스크립트 생성: {len(blocks)}개 블록, {len(full_script)}자")
+
+    # 4. QA 서비스 호출
+    try:
+        qa_result = await validate_and_correct_script(full_script)
+    except QAServiceError as e:
+        logger.error(f"QA 검증 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"message": f"QA 검증 실패: {str(e)}"}
+        )
+
+    logger.info(f"QA 검증 완료: project_id={project_id}")
+    return qa_result

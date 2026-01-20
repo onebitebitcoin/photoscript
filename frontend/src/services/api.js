@@ -146,6 +146,12 @@ export const projectApi = {
    * @param {Object} data - { text?, keywords?, order }
    */
   createBlock: (id, data) => api.post(`/projects/${id}/blocks`, data),
+
+  /**
+   * 유튜브 스크립트 QA 검증 및 보정
+   * @param {string} id - 프로젝트 ID
+   */
+  qaScript: (id) => api.post(`/projects/${id}/qa-script`),
 }
 
 /**

@@ -97,5 +97,44 @@ class MatchResponse(BaseModel):
     blocks_count: int
 
 
+class QAScriptRequest(BaseModel):
+    """QA 검증 요청 (현재는 project_id만으로 충분)"""
+    pass
+
+
+class DiagnosisSummary(BaseModel):
+    """진단 요약"""
+    problems: List[str] = Field(..., min_length=3, max_length=3, description="문제점 3개")
+    strengths: List[str] = Field(..., min_length=2, max_length=2, description="장점 2개")
+
+
+class StructureCheck(BaseModel):
+    """5블록 구조 점검"""
+    has_hook: bool = Field(..., description="Hook 블록 존재 여부")
+    has_context: bool = Field(..., description="맥락 블록 존재 여부")
+    has_promise_outline: bool = Field(..., description="Promise+Outline 블록 존재 여부")
+    has_body: bool = Field(..., description="Body 블록 존재 여부")
+    has_wrapup: bool = Field(..., description="Wrap-up 블록 존재 여부")
+    overall_pass: bool = Field(..., description="전체 구조 통과 여부")
+    comments: Optional[str] = Field(None, description="구조 관련 코멘트")
+
+
+class ChangeLogItem(BaseModel):
+    """변경 로그 항목"""
+    block_index: int = Field(..., ge=0, description="블록 인덱스 (0부터 시작)")
+    change_type: str = Field(..., description="변경 유형: 수정, 추가, 삭제")
+    description: str = Field(..., description="변경 내용 설명")
+
+
+class QAScriptResponse(BaseModel):
+    """QA 검증 응답"""
+    diagnosis: DiagnosisSummary
+    structure_check: StructureCheck
+    corrected_script: str = Field(..., description="보정된 전체 스크립트")
+    change_logs: List[ChangeLogItem] = Field(default_factory=list, description="블록별 변경 내역")
+    model: str = Field(..., description="사용된 LLM 모델")
+    created_at: datetime = Field(default_factory=datetime.now, description="검증 시각")
+
+
 # Forward reference 업데이트
 BlockSummary.model_rebuild()
