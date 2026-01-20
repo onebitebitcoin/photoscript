@@ -147,6 +147,12 @@ async def validate_and_correct_script(
 """
 
     try:
+        # 입력 스크립트 정보 로깅
+        script_chars = len(full_script)
+        script_words = len(full_script.split())
+        combined_chars = len(combined_prompt)
+        logger.info(f"입력 정보 - 원본 스크립트: {script_chars}자 / {script_words}단어, 전체 프롬프트: {combined_chars}자")
+
         logger.debug("OpenAI API 호출 시작")
 
         response = await client.responses.create(
@@ -158,10 +164,16 @@ async def validate_and_correct_script(
         content = response.output_text.strip()
         logger.debug(f"OpenAI 응답: {content[:500]}...")
 
-        # 토큰 사용량 추출
-        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
-        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
-        logger.info(f"토큰 사용량 - 입력: {input_tokens}, 출력: {output_tokens}")
+        # 토큰 사용량 추출 및 디버깅
+        if hasattr(response, 'usage'):
+            logger.debug(f"Usage 객체: {response.usage}")
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            logger.info(f"토큰 사용량 - 입력: {input_tokens}, 출력: {output_tokens}")
+        else:
+            logger.warning("API 응답에 usage 정보가 없습니다")
+            input_tokens = None
+            output_tokens = None
 
         # JSON 추출 (마크다운 코드 블록 제거)
         json_content = _extract_json(content)
