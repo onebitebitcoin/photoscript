@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Copy, FileCheck, Loader2 } from 'lucide-react'
+import { Copy, FileCheck, Loader2, History } from 'lucide-react'
 import { renderTextWithLinks } from './EditableBlockCard'
 import { projectApi } from '../../services/api'
 import QAResultView from './QAResultView'
@@ -14,7 +14,7 @@ import logger from '../../utils/logger'
 function UnifiedDocumentView({ blocks, projectId }) {
   const [isCopying, setIsCopying] = useState(false)
   const [isQALoading, setIsQALoading] = useState(false)
-  const [viewMode, setViewMode] = useState('script') // 'script' | 'qa'
+  const [viewMode, setViewMode] = useState('script') // 'script' | 'qa' | 'versions'
   const [qaResult, setQaResult] = useState(null)
   const [additionalPrompt, setAdditionalPrompt] = useState('')
 
@@ -58,6 +58,12 @@ function UnifiedDocumentView({ blocks, projectId }) {
     setViewMode('script')
   }
 
+  // 이전 버전 보기
+  const handleViewVersions = () => {
+    setViewMode('versions')
+    logger.info('Viewing QA versions', { projectId })
+  }
+
   if (!blocks?.length) {
     return (
       <div className="max-w-3xl mx-auto px-4 md:px-6 py-12 text-center">
@@ -70,7 +76,7 @@ function UnifiedDocumentView({ blocks, projectId }) {
     <div className="max-w-3xl mx-auto px-2 md:px-6 py-6">
       {/* 상단 버튼 영역 */}
       <div className="mb-6 space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {viewMode === 'script' ? (
             <>
               <button
@@ -96,6 +102,13 @@ function UnifiedDocumentView({ blocks, projectId }) {
                   <FileCheck className="w-4 h-4" />
                 )}
                 <span className="text-sm">QA 검증</span>
+              </button>
+              <button
+                onClick={handleViewVersions}
+                className="flex items-center gap-2 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors"
+              >
+                <History className="w-4 h-4" />
+                <span className="text-sm">이전 버전</span>
               </button>
             </>
           ) : (
@@ -140,9 +153,12 @@ function UnifiedDocumentView({ blocks, projectId }) {
             </div>
           ))}
         </div>
-      ) : (
+      ) : viewMode === 'qa' ? (
         // QA 결과 보기
         <QAResultView qaResult={qaResult} projectId={projectId} />
+      ) : (
+        // 이전 버전 목록 보기
+        <QAResultView qaResult={null} projectId={projectId} initialTab="versions" />
       )}
     </div>
   )

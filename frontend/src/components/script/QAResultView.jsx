@@ -8,19 +8,11 @@ import { projectApi } from '../../services/api'
  * QA 결과 표시 컴포넌트
  * 5개 탭: 진단, 구조 점검, 보정 스크립트, 변경 로그, 버전 목록
  */
-function QAResultView({ qaResult, projectId }) {
-  const [activeTab, setActiveTab] = useState('diagnosis')
+function QAResultView({ qaResult, projectId, initialTab = 'diagnosis' }) {
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [isCopyingCorrected, setIsCopyingCorrected] = useState(false)
   const [versions, setVersions] = useState([])
   const [isLoadingVersions, setIsLoadingVersions] = useState(false)
-
-  if (!qaResult) {
-    return (
-      <div className="text-gray-400 text-center py-12">
-        QA 결과를 불러오는 중입니다...
-      </div>
-    )
-  }
 
   // 버전 목록 불러오기
   const loadVersions = async () => {
@@ -75,13 +67,18 @@ function QAResultView({ qaResult, projectId }) {
       <div className="flex border-b border-dark-border overflow-x-auto mb-6">
         {tabs.map(tab => {
           const Icon = tab.icon
+          // qaResult가 없으면 versions 탭만 활성화
+          const isDisabled = !qaResult && tab.id !== 'versions'
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => !isDisabled && setActiveTab(tab.id)}
+              disabled={isDisabled}
               className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'border-primary text-primary'
+                  : isDisabled
+                  ? 'border-transparent text-gray-600 cursor-not-allowed'
                   : 'border-transparent text-gray-400 hover:text-gray-300'
               }`}
             >
@@ -94,16 +91,16 @@ function QAResultView({ qaResult, projectId }) {
 
       {/* 탭 콘텐츠 */}
       <div>
-        {activeTab === 'diagnosis' && <DiagnosisTab diagnosis={qaResult.diagnosis} />}
-        {activeTab === 'structure' && <StructureTab structureCheck={qaResult.structure_check} />}
-        {activeTab === 'corrected' && (
+        {activeTab === 'diagnosis' && qaResult && <DiagnosisTab diagnosis={qaResult.diagnosis} />}
+        {activeTab === 'structure' && qaResult && <StructureTab structureCheck={qaResult.structure_check} />}
+        {activeTab === 'corrected' && qaResult && (
           <CorrectedScriptTab
             correctedScript={qaResult.corrected_script}
             isCopying={isCopyingCorrected}
             onCopy={handleCopyCorrected}
           />
         )}
-        {activeTab === 'changelog' && <ChangeLogTab changeLogs={qaResult.change_logs} />}
+        {activeTab === 'changelog' && qaResult && <ChangeLogTab changeLogs={qaResult.change_logs} />}
         {activeTab === 'versions' && (
           <VersionsTab
             projectId={projectId}
@@ -114,10 +111,12 @@ function QAResultView({ qaResult, projectId }) {
         )}
       </div>
 
-      {/* 푸터 (모델 정보) */}
-      <div className="mt-6 pt-4 border-t border-dark-border text-xs text-gray-500">
-        검증 모델: {qaResult.model} | 검증 시각: {new Date(qaResult.created_at).toLocaleString('ko-KR')}
-      </div>
+      {/* 푸터 (모델 정보) - qaResult가 있을 때만 표시 */}
+      {qaResult && (
+        <div className="mt-6 pt-4 border-t border-dark-border text-xs text-gray-500">
+          검증 모델: {qaResult.model} | 검증 시각: {new Date(qaResult.created_at).toLocaleString('ko-KR')}
+        </div>
+      )}
     </div>
   )
 }
