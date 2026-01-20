@@ -17,21 +17,10 @@ function UnifiedDocumentView({ blocks }) {
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-6 py-6">
       {blocks.map((block, index) => (
-        <div key={block.id}>
-          {/* 블록 번호 */}
-          <div className="text-xs text-gray-500 mb-2">
-            BLOCK {index + 1}
-          </div>
-
-          {/* 블록 텍스트 */}
-          <div className="text-gray-200 whitespace-pre-wrap mb-6">
+        <div key={block.id} className={index < blocks.length - 1 ? 'mb-8' : ''}>
+          <div className="text-gray-200 whitespace-pre-wrap">
             {renderTextWithLinks(block.text)}
           </div>
-
-          {/* 구분선 (마지막 블록 제외) */}
-          {index < blocks.length - 1 && (
-            <div className="border-b border-dark-border mb-6" />
-          )}
         </div>
       ))}
     </div>
