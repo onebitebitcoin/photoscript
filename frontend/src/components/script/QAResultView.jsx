@@ -100,8 +100,6 @@ function QAResultView({ qaResult, projectId, originalTitle, initialTab = 'diagno
             correctedScript={qaResult.corrected_script}
             isCopying={isCopyingCorrected}
             onCopy={handleCopyCorrected}
-            projectId={projectId}
-            originalTitle={originalTitle}
           />
         )}
         {activeTab === 'changelog' && qaResult && <ChangeLogTab changeLogs={qaResult.change_logs} />}
@@ -242,61 +240,7 @@ function StructureTab({ structureCheck }) {
 /**
  * 보정 스크립트 탭
  */
-function CorrectedScriptTab({ correctedScript, isCopying, onCopy, projectId, originalTitle }) {
-  const navigate = useNavigate()
-  const [isCreatingProject, setIsCreatingProject] = useState(false)
-
-  const handleCreateNewProject = async () => {
-    try {
-      setIsCreatingProject(true)
-
-      // 1. 새 프로젝트 생성
-      const newTitle = originalTitle
-        ? `${originalTitle} (QA 보정)`
-        : `QA 보정 - ${new Date().toLocaleDateString('ko-KR')}`
-
-      toast.loading('새 프로젝트 생성 중...', { id: 'create-qa-project' })
-
-      const { data: newProject } = await projectApi.create({
-        script_raw: correctedScript,
-        title: newTitle
-      })
-
-      logger.info('New project created from corrected script', {
-        projectId: newProject.id,
-        originalProjectId: projectId
-      })
-
-      // 2. 블록 자동 분할
-      toast.loading('스크립트 분석 중...', { id: 'create-qa-project' })
-      await projectApi.split(newProject.id)
-
-      logger.info('QA corrected project split completed', {
-        projectId: newProject.id
-      })
-
-      // 3. 성공 메시지
-      toast.success('새 프로젝트가 생성되었습니다!', {
-        id: 'create-qa-project'
-      })
-
-      // 4. 편집 페이지로 이동
-      navigate(`/project/${newProject.id}/edit`)
-
-    } catch (err) {
-      const message = err.response?.data?.detail?.message || err.message
-      toast.error(`프로젝트 생성 실패: ${message}`, {
-        id: 'create-qa-project'
-      })
-      logger.error('Failed to create QA corrected project', {
-        error: message,
-        projectId
-      })
-    } finally {
-      setIsCreatingProject(false)
-    }
-  }
-
+function CorrectedScriptTab({ correctedScript, isCopying, onCopy }) {
   return (
     <div className="space-y-4">
       {/* 헤더 및 버튼 */}
@@ -305,36 +249,19 @@ function CorrectedScriptTab({ correctedScript, isCopying, onCopy, projectId, ori
           가이드라인에 맞게 보정된 최종 스크립트
         </h3>
 
-        <div className="flex gap-2 flex-shrink-0">
-          {/* 복사 버튼 */}
-          <button
-            onClick={onCopy}
-            disabled={isCopying}
-            className="flex items-center gap-1.5 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 text-sm"
-          >
-            {isCopying ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-            <span>복사</span>
-          </button>
-
-          {/* 새 프로젝트 생성 버튼 */}
-          <button
-            onClick={handleCreateNewProject}
-            disabled={isCreatingProject}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary/10 border border-primary/30 text-primary rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50 text-sm font-medium"
-          >
-            {isCreatingProject ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <FilePlus className="w-4 h-4" />
-            )}
-            <span className="hidden xs:inline">새 프로젝트 생성</span>
-            <span className="xs:hidden">생성</span>
-          </button>
-        </div>
+        {/* 복사 버튼 */}
+        <button
+          onClick={onCopy}
+          disabled={isCopying}
+          className="flex items-center gap-1.5 px-3 py-2 bg-dark-card border border-dark-border rounded-lg hover:bg-dark-hover transition-colors disabled:opacity-50 text-sm"
+        >
+          {isCopying ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Copy className="w-4 h-4" />
+          )}
+          <span>복사</span>
+        </button>
       </div>
 
       {/* 보정 스크립트 텍스트 */}
@@ -389,6 +316,7 @@ function ChangeLogTab({ changeLogs }) {
  * 버전 목록 탭
  */
 function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
+  const navigate = useNavigate()
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ version_name: '', memo: '' })
   const [selectedVersion, setSelectedVersion] = useState(null)
@@ -397,6 +325,9 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
   // 원본 프로젝트 정보
   const [originalScript, setOriginalScript] = useState(null)
   const [isLoadingProject, setIsLoadingProject] = useState(false)
+
+  // 새 프로젝트 생성 관련
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
 
   // Diff 비교 관련 상태
   const [comparisonMode, setComparisonMode] = useState(false)
@@ -513,6 +444,58 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
     } catch (err) {
       toast.error('복사 실패')
       logger.error('Failed to copy version script', { error: err.message })
+    }
+  }
+
+  // 버전 스크립트로 새 프로젝트 생성
+  const handleCreateProjectFromVersion = async (version) => {
+    try {
+      setIsCreatingProject(true)
+
+      // 1. 새 프로젝트 생성
+      const newTitle = version.version_name
+        ? `${version.version_name} (v${version.version_number})`
+        : `QA v${version.version_number} - ${new Date().toLocaleDateString('ko-KR')}`
+
+      toast.loading('새 프로젝트 생성 중...', { id: 'create-version-project' })
+
+      const { data: newProject } = await projectApi.create({
+        script_raw: version.corrected_script,
+        title: newTitle
+      })
+
+      logger.info('New project created from version', {
+        projectId: newProject.id,
+        versionId: version.id
+      })
+
+      // 2. 블록 자동 분할
+      toast.loading('스크립트 분석 중...', { id: 'create-version-project' })
+      await projectApi.split(newProject.id)
+
+      logger.info('Version project split completed', {
+        projectId: newProject.id
+      })
+
+      // 3. 성공 메시지
+      toast.success('새 프로젝트가 생성되었습니다!', {
+        id: 'create-version-project'
+      })
+
+      // 4. 편집 페이지로 이동
+      navigate(`/project/${newProject.id}/edit`)
+
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`프로젝트 생성 실패: ${message}`, {
+        id: 'create-version-project'
+      })
+      logger.error('Failed to create project from version', {
+        error: message,
+        versionId: version.id
+      })
+    } finally {
+      setIsCreatingProject(false)
     }
   }
 
@@ -869,6 +852,19 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
               >
                 <Copy className="w-3 h-3" />
                 <span className="hidden xs:inline">복사</span>
+              </button>
+              <button
+                onClick={() => handleCreateProjectFromVersion(selectedVersion)}
+                disabled={isCreatingProject}
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary rounded hover:bg-primary/20 transition-colors disabled:opacity-50 text-sm font-medium whitespace-nowrap"
+              >
+                {isCreatingProject ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <FilePlus className="w-3 h-3" />
+                )}
+                <span className="hidden xs:inline">프로젝트 생성</span>
+                <span className="xs:hidden">생성</span>
               </button>
               <button
                 onClick={() => setSelectedVersion(null)}
