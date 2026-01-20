@@ -394,12 +394,40 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
   const [selectedVersion, setSelectedVersion] = useState(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
+  // 원본 프로젝트 정보
+  const [originalScript, setOriginalScript] = useState(null)
+  const [isLoadingProject, setIsLoadingProject] = useState(false)
+
   // Diff 비교 관련 상태
   const [comparisonMode, setComparisonMode] = useState(false)
-  const [selectedVersions, setSelectedVersions] = useState([]) // 최대 2개
+  const [selectedVersions, setSelectedVersions] = useState([]) // 최대 2개 ('v0' 또는 versionId)
   const [diffData, setDiffData] = useState(null) // { old, new }
   const [isLoadingDiff, setIsLoadingDiff] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+
+  // 원본 프로젝트 정보 불러오기
+  const loadOriginalScript = async () => {
+    if (!projectId || originalScript) return
+    try {
+      setIsLoadingProject(true)
+      const { data } = await projectApi.get(projectId)
+      setOriginalScript(data.script_raw)
+      logger.info('Original script loaded for comparison')
+    } catch (err) {
+      const message = err.response?.data?.detail?.message || err.message
+      toast.error(`원본 스크립트 불러오기 실패: ${message}`)
+      logger.error('Failed to load original script', { error: message })
+    } finally {
+      setIsLoadingProject(false)
+    }
+  }
+
+  // 비교 모드 활성화 시 원본 스크립트 로드
+  useEffect(() => {
+    if (comparisonMode) {
+      loadOriginalScript()
+    }
+  }, [comparisonMode])
 
   // 모바일 감지
   useEffect(() => {
@@ -488,17 +516,17 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
     }
   }
 
-  // 버전 선택 토글 (Diff 비교용)
-  const handleToggleVersion = (versionId) => {
+  // 버전 선택 토글 (Diff 비교용) - 'v0' 또는 versionId
+  const handleToggleVersion = (id) => {
     setSelectedVersions(prev => {
-      if (prev.includes(versionId)) {
-        return prev.filter(id => id !== versionId)
+      if (prev.includes(id)) {
+        return prev.filter(selected => selected !== id)
       } else {
         if (prev.length >= 2) {
           toast.error('최대 2개 버전만 선택 가능합니다')
           return prev
         }
-        return [...prev, versionId]
+        return [...prev, id]
       }
     })
   }
@@ -513,14 +541,30 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
     try {
       setIsLoadingDiff(true)
 
-      const [response1, response2] = await Promise.all([
-        projectApi.getQAVersion(projectId, selectedVersions[0]),
-        projectApi.getQAVersion(projectId, selectedVersions[1])
+      // v0와 QA 버전의 데이터를 가져오기
+      const getData = async (id) => {
+        if (id === 'v0') {
+          return {
+            version_number: 0,
+            corrected_script: originalScript,
+            version_name: '원본 스크립트',
+            created_at: null
+          }
+        } else {
+          const { data } = await projectApi.getQAVersion(projectId, id)
+          return data
+        }
+      }
+
+      const [data1, data2] = await Promise.all([
+        getData(selectedVersions[0]),
+        getData(selectedVersions[1])
       ])
 
-      const [oldData, newData] = response1.data.version_number < response2.data.version_number
-        ? [response1.data, response2.data]
-        : [response2.data, response1.data]
+      // 버전 번호 기준으로 old/new 정렬
+      const [oldData, newData] = data1.version_number < data2.version_number
+        ? [data1, data2]
+        : [data2, data1]
 
       setDiffData({ old: oldData, new: newData })
       logger.info('Diff comparison loaded', {
@@ -579,6 +623,38 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
           <span>{comparisonMode ? '비교 취소' : '버전 비교'}</span>
         </button>
       </div>
+
+      {/* v0 (원본 스크립트) - 비교 모드일 때만 표시 */}
+      {comparisonMode && originalScript && (
+        <div className="p-4 bg-dark-card border border-primary/30 rounded-lg">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 pt-0.5">
+              <input
+                type="checkbox"
+                checked={selectedVersions.includes('v0')}
+                onChange={() => handleToggleVersion('v0')}
+                disabled={
+                  !selectedVersions.includes('v0') &&
+                  selectedVersions.length >= 2
+                }
+                className="w-4 h-4 rounded border-dark-border bg-dark-bg text-primary focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-gray-200">v0</span>
+                <span className="text-sm text-gray-300">원본 스크립트</span>
+                <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded">
+                  초기
+                </span>
+              </div>
+              <div className="text-xs text-gray-500">
+                QA 검증 이전의 원본 스크립트
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 버전 목록 */}
       {versions.map((version, index) => (
@@ -733,7 +809,9 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
         <div className="mt-6 pt-6 border-t border-dark-border">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-gray-200">
-              v{diffData.old.version_number} vs v{diffData.new.version_number}
+              v{diffData.old.version_number}{diffData.old.version_name ? ` (${diffData.old.version_name})` : ''}
+              {' vs '}
+              v{diffData.new.version_number}{diffData.new.version_name ? ` (${diffData.new.version_name})` : ''}
             </h3>
             <button
               onClick={handleCloseDiff}
