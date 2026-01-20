@@ -16,6 +16,9 @@ from app.config import get_settings
 # 마이그레이션 모듈 import
 from migrations import m001_add_user_id_to_projects
 from migrations import m002_add_block_unique_constraint
+from migrations import m003_change_index_to_order_float
+from migrations import m004_add_qa_versions
+from migrations import m005_add_user_qa_settings
 
 
 def run_all_migrations():
@@ -31,6 +34,9 @@ def run_all_migrations():
     migrations = [
         ("001", "projects 테이블에 user_id 추가", m001_add_user_id_to_projects),
         ("002", "blocks 테이블에 Unique Constraint 추가", m002_add_block_unique_constraint),
+        ("003", "blocks.index를 blocks.order(Float)로 변경", m003_change_index_to_order_float),
+        ("004", "qa_versions 테이블 생성", m004_add_qa_versions),
+        ("005", "users 테이블에 qa_custom_guideline 추가", m005_add_user_qa_settings),
     ]
 
     for num, description, module in migrations:
