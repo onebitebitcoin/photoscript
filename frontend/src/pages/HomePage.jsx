@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, FileText, Trash2, Loader2, ChevronRight, LogOut, X } from 'lucide-react'
+import { Plus, FileText, Trash2, Loader2, ChevronRight, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 import ScriptEditor from '../components/script/ScriptEditor'
@@ -13,7 +13,7 @@ import logger from '../utils/logger'
 
 function HomePage() {
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [projects, setProjects] = useState([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(true)
   const [showNewScript, setShowNewScript] = useState(false)
@@ -150,83 +150,17 @@ function HomePage() {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* 헤더 */}
-        <div className="flex items-center justify-between gap-2 mb-8">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-white truncate">Dashboard</h1>
-            {user && (
-              <span className="text-sm text-gray-400 hidden sm:inline">{user.nickname}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            <button
-              onClick={() => setShowNewScript(!showNewScript)}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg transition-colors whitespace-nowrap"
-            >
-              {showNewScript ? (
-                <>
-                  <X className="w-4 h-4" />
-                  <span className="hidden sm:inline text-sm">취소</span>
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline text-sm">새 스크립트</span>
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                logout()
-                navigate('/login')
-              }}
-              className="p-2 text-gray-400 hover:text-white hover:bg-dark-card rounded-lg transition-colors flex-shrink-0"
-              title="로그아웃"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
+        <div className="flex items-center gap-2 sm:gap-3 mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold text-white">Dashboard</h1>
+          {user && (
+            <span className="text-sm text-gray-400 hidden sm:inline">{user.nickname}</span>
+          )}
         </div>
 
         {/* 에러 표시 */}
         {error && (
           <div className="mb-6">
             <ErrorAlert error={error} onClose={() => setError(null)} />
-          </div>
-        )}
-
-        {/* 새 스크립트 작성 폼 */}
-        {showNewScript && (
-          <div className="mb-8 bg-dark-card border border-dark-border rounded-lg p-4">
-            <h2 className="text-lg font-medium text-white mb-4">새 스크립트 작성</h2>
-
-            {/* 제목 */}
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="프로젝트 제목 (선택사항)"
-              className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 mb-4 text-white placeholder-gray-500 outline-none focus:border-primary"
-            />
-
-            {/* 스크립트 편집기 */}
-            <ScriptEditor
-              value={script}
-              onChange={setScript}
-              disabled={isCreating}
-              placeholder="유튜브 스크립트를 붙여넣거나 직접 작성하세요..."
-            />
-
-            {/* 생성 버튼 */}
-            <div className="mt-4 flex justify-end">
-              <Button
-                onClick={handleCreateScript}
-                loading={isCreating}
-                disabled={!script.trim()}
-                icon={FileText}
-              >
-                스크립트 분석
-              </Button>
-            </div>
           </div>
         )}
 
@@ -240,47 +174,110 @@ function HomePage() {
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-          ) : projects.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>아직 저장된 스크립트가 없습니다</p>
-              <p className="text-sm mt-1">새 스크립트를 작성해보세요</p>
-            </div>
           ) : (
             <div className="space-y-2">
-              {projects.map((project) => (
+              {/* 새 스크립트 추가 카드 */}
+              {!showNewScript ? (
                 <div
-                  key={project.id}
-                  onClick={() => handleProjectClick(project.id)}
-                  className="bg-dark-card border border-dark-border rounded-lg p-4 hover:border-primary/50 cursor-pointer transition-colors group"
+                  onClick={() => setShowNewScript(true)}
+                  className="bg-dark-card border border-dashed border-primary/50 rounded-lg p-4 hover:border-primary hover:bg-primary/5 cursor-pointer transition-colors group"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-white font-medium truncate">
-                        {project.title || '제목 없음'}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {formatDate(project.created_at)}
-                      </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center group-hover:bg-primary/30 transition-colors">
+                      <Plus className="w-5 h-5 text-primary" />
                     </div>
-
-                    <div className="flex items-center gap-2 ml-4">
-                      <button
-                        onClick={(e) => handleDelete(project.id, e)}
-                        disabled={deletingId === project.id}
-                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                      >
-                        {deletingId === project.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </button>
-                      <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-primary transition-colors" />
+                    <div>
+                      <h3 className="text-white font-medium">새 스크립트 작성</h3>
+                      <p className="text-sm text-gray-400 mt-0.5">유튜브 스크립트를 추가하세요</p>
                     </div>
                   </div>
                 </div>
-              ))}
+              ) : (
+                /* 새 스크립트 작성 폼 */
+                <div className="bg-dark-card border border-primary/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium text-white">새 스크립트 작성</h2>
+                    <button
+                      onClick={() => setShowNewScript(false)}
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-dark-hover rounded transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* 제목 */}
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="프로젝트 제목 (선택사항)"
+                    className="w-full bg-dark-bg border border-dark-border rounded-lg px-4 py-2 mb-4 text-white placeholder-gray-500 outline-none focus:border-primary"
+                  />
+
+                  {/* 스크립트 편집기 */}
+                  <ScriptEditor
+                    value={script}
+                    onChange={setScript}
+                    disabled={isCreating}
+                    placeholder="유튜브 스크립트를 붙여넣거나 직접 작성하세요..."
+                  />
+
+                  {/* 생성 버튼 */}
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      onClick={handleCreateScript}
+                      loading={isCreating}
+                      disabled={!script.trim()}
+                      icon={FileText}
+                    >
+                      스크립트 분석
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* 기존 프로젝트 목록 */}
+              {projects.length === 0 && !showNewScript ? (
+                <div className="text-center py-12 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>아직 저장된 스크립트가 없습니다</p>
+                  <p className="text-sm mt-1">위의 카드를 클릭하여 새 스크립트를 작성해보세요</p>
+                </div>
+              ) : (
+                projects.map((project) => (
+                  <div
+                    key={project.id}
+                    onClick={() => handleProjectClick(project.id)}
+                    className="bg-dark-card border border-dark-border rounded-lg p-4 hover:border-primary/50 cursor-pointer transition-colors group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-white font-medium truncate">
+                          {project.title || '제목 없음'}
+                        </h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {formatDate(project.created_at)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 ml-4">
+                        <button
+                          onClick={(e) => handleDelete(project.id, e)}
+                          disabled={deletingId === project.id}
+                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                        >
+                          {deletingId === project.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                        <ChevronRight className="w-5 h-5 text-gray-500 group-hover:text-primary transition-colors" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>
