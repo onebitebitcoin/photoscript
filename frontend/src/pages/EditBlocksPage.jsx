@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, Fragment } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Sparkles, Loader2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Sparkles, Loader2, AlertCircle, FileText, Edit2 } from 'lucide-react'
 import { projectApi, blockApi } from '../services/api'
 import EditableBlockCard from '../components/script/EditableBlockCard'
 import AddBlockButton from '../components/script/AddBlockButton'
+import UnifiedDocumentView from '../components/script/UnifiedDocumentView'
 import Button from '../components/common/Button'
 import logger from '../utils/logger'
 import toast from 'react-hot-toast'
@@ -27,6 +28,10 @@ function EditBlocksPage() {
   const [isAddingBlock, setIsAddingBlock] = useState(false)
   const [newBlockId, setNewBlockId] = useState(null) // 새로 추가된 블록 ID (자동 편집 모드용)
   const [error, setError] = useState(null)
+
+  // 뷰 모드 및 편집 중인 블록 관리
+  const [viewMode, setViewMode] = useState('edit') // 'edit' | 'unified'
+  const [editingBlockIds, setEditingBlockIds] = useState(new Set())
 
   // 프로젝트 및 블록 로드
   const loadProject = useCallback(async () => {
@@ -197,6 +202,36 @@ function EditBlocksPage() {
     }
   }
 
+  // 블록 편집 시작
+  const handleEditStart = useCallback((blockId) => {
+    setEditingBlockIds(prev => new Set([...prev, blockId]))
+    logger.info('Edit started', { blockId })
+  }, [])
+
+  // 블록 편집 종료
+  const handleEditEnd = useCallback((blockId) => {
+    setEditingBlockIds(prev => {
+      const next = new Set(prev)
+      next.delete(blockId)
+      return next
+    })
+    logger.info('Edit ended', { blockId })
+  }, [])
+
+  // 뷰 모드 전환
+  const handleToggleViewMode = useCallback(() => {
+    // 편집 중인 블록 확인
+    if (editingBlockIds.size > 0) {
+      toast.error('편집 중인 블록이 있습니다. 저장 또는 취소 후 전환해주세요')
+      return
+    }
+
+    // 모드 전환
+    const nextMode = viewMode === 'edit' ? 'unified' : 'edit'
+    setViewMode(nextMode)
+    logger.info('View mode changed', { mode: nextMode })
+  }, [editingBlockIds, viewMode])
+
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -222,14 +257,29 @@ function EditBlocksPage() {
             </h1>
           </div>
 
-          <Button
-            size="sm"
-            loading={isMatching}
-            onClick={handleGenerateVisuals}
-            icon={Sparkles}
-          >
-            비주얼 생성
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* 모드 전환 버튼 */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleViewMode}
+              icon={viewMode === 'edit' ? FileText : Edit2}
+            >
+              <span className="hidden sm:inline">
+                {viewMode === 'edit' ? '통합 보기' : '편집 모드'}
+              </span>
+            </Button>
+
+            {/* 비주얼 생성 버튼 */}
+            <Button
+              size="sm"
+              loading={isMatching}
+              onClick={handleGenerateVisuals}
+              icon={Sparkles}
+            >
+              비주얼 생성
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -249,33 +299,44 @@ function EditBlocksPage() {
       )}
 
       {/* 블록 목록 */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="space-y-3 max-w-3xl mx-auto">
-          {/* 첫 번째 블록 위에 추가 버튼 */}
-          <AddBlockButton
-            onAdd={() => handleAddBlock(0)}
-            isLoading={isAddingBlock}
-          />
-
-          {blocks.map((block, index) => (
-            <Fragment key={block.id}>
-              <EditableBlockCard
-                block={block}
-                index={index}
-                isNew={newBlockId === block.id}
-                onUpdate={handleUpdateBlock}
-                onBlockChange={handleBlockChange}
-                onNewBlockProcessed={() => setNewBlockId(null)}
-                onDelete={handleDeleteBlock}
-              />
-              {/* 각 블록 아래에 추가 버튼 - 배열 인덱스 + 1 전달 */}
+      <div className="flex-1 overflow-y-auto">
+        {viewMode === 'edit' ? (
+          // 편집 모드
+          <div className="p-4">
+            <div className="space-y-3 max-w-3xl mx-auto">
+              {/* 첫 번째 블록 위에 추가 버튼 */}
               <AddBlockButton
-                onAdd={() => handleAddBlock(index + 1)}
+                onAdd={() => handleAddBlock(0)}
                 isLoading={isAddingBlock}
               />
-            </Fragment>
-          ))}
-        </div>
+
+              {blocks.map((block, index) => (
+                <Fragment key={block.id}>
+                  <EditableBlockCard
+                    block={block}
+                    index={index}
+                    isNew={newBlockId === block.id}
+                    isEditing={editingBlockIds.has(block.id)}
+                    onUpdate={handleUpdateBlock}
+                    onBlockChange={handleBlockChange}
+                    onNewBlockProcessed={() => setNewBlockId(null)}
+                    onDelete={handleDeleteBlock}
+                    onEditStart={handleEditStart}
+                    onEditEnd={handleEditEnd}
+                  />
+                  {/* 각 블록 아래에 추가 버튼 - 배열 인덱스 + 1 전달 */}
+                  <AddBlockButton
+                    onAdd={() => handleAddBlock(index + 1)}
+                    isLoading={isAddingBlock}
+                  />
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // 통합 문서 보기 모드
+          <UnifiedDocumentView blocks={blocks} />
+        )}
       </div>
     </div>
   )

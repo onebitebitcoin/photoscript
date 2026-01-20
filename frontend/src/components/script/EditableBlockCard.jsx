@@ -16,7 +16,7 @@ import BlockAssetSection from './BlockAssetSection'
 /**
  * 텍스트에서 URL을 감지하여 클릭 가능한 링크로 변환
  */
-function renderTextWithLinks(text) {
+export function renderTextWithLinks(text) {
   if (!text) return null
 
   const urlPattern = /(https?:\/\/[^\s]+)/g
@@ -49,13 +49,15 @@ function EditableBlockCard({
   index,
   isSelected,
   isNew,
+  isEditing = false,
   onSelect,
   onUpdate,
   onNewBlockProcessed,
-  onDelete
+  onDelete,
+  onEditStart,
+  onEditEnd
 }) {
-  // 편집 상태
-  const [isEditing, setIsEditing] = useState(false)
+  // 편집 상태는 부모로부터 전달받음
   const [isExpanded, setIsExpanded] = useState(true)
   const [text, setText] = useState(block.text)
   const [isSaving, setIsSaving] = useState(false)
@@ -83,17 +85,17 @@ function EditableBlockCard({
   // 새 블록인 경우 자동으로 편집 모드 진입
   useEffect(() => {
     if (isNew) {
-      setIsEditing(true)
+      onEditStart?.(block.id)
       onNewBlockProcessed?.()
     }
-  }, [isNew, onNewBlockProcessed])
+  }, [isNew, onNewBlockProcessed, onEditStart, block.id])
 
   // 블록 저장
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     try {
       await onUpdate(block.id, { text })
-      setIsEditing(false)
+      onEditEnd?.(block.id)
       logger.info('Block saved', { blockId: block.id })
     } catch (error) {
       logger.error('Failed to save block', { blockId: block.id, error: error.message })
@@ -101,13 +103,13 @@ function EditableBlockCard({
     } finally {
       setIsSaving(false)
     }
-  }, [block.id, text, onUpdate])
+  }, [block.id, text, onUpdate, onEditEnd])
 
   // 편집 취소
   const handleCancel = useCallback(() => {
     setText(block.text)
-    setIsEditing(false)
-  }, [block.text])
+    onEditEnd?.(block.id)
+  }, [block.text, onEditEnd, block.id])
 
   // 에셋 검색 (키워드 기반)
   const handleSearch = useCallback(async () => {
@@ -200,7 +202,7 @@ function EditableBlockCard({
           {!isEditing && (
             <>
               <button
-                onClick={() => setIsEditing(true)}
+                onClick={() => onEditStart?.(block.id)}
                 className="p-1.5 hover:bg-dark-hover rounded transition-colors"
                 title="Edit"
               >
