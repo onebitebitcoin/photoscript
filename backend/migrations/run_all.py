@@ -19,6 +19,7 @@ from migrations import m002_add_block_unique_constraint
 from migrations import m003_change_index_to_order_float
 from migrations import m004_add_qa_versions
 from migrations import m005_add_user_qa_settings
+from migrations import m006_add_qa_version_tokens
 
 
 def run_all_migrations():
@@ -37,6 +38,7 @@ def run_all_migrations():
         ("003", "blocks.index를 blocks.order(Float)로 변경", m003_change_index_to_order_float),
         ("004", "qa_versions 테이블 생성", m004_add_qa_versions),
         ("005", "users 테이블에 qa_custom_guideline 추가", m005_add_user_qa_settings),
+        ("006", "qa_versions 테이블에 input_tokens, output_tokens 추가", m006_add_qa_version_tokens),
     ]
 
     for num, description, module in migrations:

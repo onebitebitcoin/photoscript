@@ -65,7 +65,9 @@ class QAVersionService:
         corrected_script: str,
         model: str,
         version_name: Optional[str] = None,
-        memo: Optional[str] = None
+        memo: Optional[str] = None,
+        input_tokens: Optional[int] = None,
+        output_tokens: Optional[int] = None
     ) -> QAVersion:
         """
         버전 생성 (version_number 자동 증가)
@@ -77,6 +79,8 @@ class QAVersionService:
             model: 사용된 LLM 모델
             version_name: 버전 이름 (선택)
             memo: 메모 (선택)
+            input_tokens: 입력 토큰 수 (선택)
+            output_tokens: 출력 토큰 수 (선택)
 
         Returns:
             생성된 QAVersion
@@ -95,7 +99,9 @@ class QAVersionService:
             version_name=version_name,
             memo=memo,
             corrected_script=corrected_script,
-            model=model
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens
         )
 
         db.add(version)

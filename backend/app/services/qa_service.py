@@ -158,6 +158,11 @@ async def validate_and_correct_script(
         content = response.output_text.strip()
         logger.debug(f"OpenAI 응답: {content[:500]}...")
 
+        # 토큰 사용량 추출
+        input_tokens = response.usage.input_tokens if hasattr(response, 'usage') else None
+        output_tokens = response.usage.output_tokens if hasattr(response, 'usage') else None
+        logger.info(f"토큰 사용량 - 입력: {input_tokens}, 출력: {output_tokens}")
+
         # JSON 추출 (마크다운 코드 블록 제거)
         json_content = _extract_json(content)
 
@@ -171,6 +176,8 @@ async def validate_and_correct_script(
             corrected_script=data["corrected_script"],
             change_logs=[ChangeLogItem(**log) for log in data.get("change_logs", [])],
             model="gpt-5-mini",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
             created_at=datetime.now()
         )
 

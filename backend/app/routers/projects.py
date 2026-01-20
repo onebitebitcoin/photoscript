@@ -528,7 +528,9 @@ async def qa_script_validation(
             db=db,
             project_id=project_id,
             corrected_script=qa_result.corrected_script,
-            model=qa_result.model
+            model=qa_result.model,
+            input_tokens=qa_result.input_tokens,
+            output_tokens=qa_result.output_tokens
         )
         logger.info(f"QA 버전 자동 저장 완료: project_id={project_id}")
     except Exception as e:

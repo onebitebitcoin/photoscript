@@ -113,8 +113,14 @@ function QAResultView({ qaResult, projectId, initialTab = 'diagnosis' }) {
 
       {/* 푸터 (모델 정보) - qaResult가 있을 때만 표시 */}
       {qaResult && (
-        <div className="mt-6 pt-4 border-t border-dark-border text-xs text-gray-500">
-          검증 모델: {qaResult.model} | 검증 시각: {new Date(qaResult.created_at).toLocaleString('ko-KR')}
+        <div className="mt-6 pt-4 border-t border-dark-border text-xs text-gray-500 space-y-1">
+          <div>검증 모델: {qaResult.model} | 검증 시각: {new Date(qaResult.created_at).toLocaleString('ko-KR')}</div>
+          {(qaResult.input_tokens || qaResult.output_tokens) && (
+            <div>
+              입력 토큰: {qaResult.input_tokens?.toLocaleString() || 'N/A'} |
+              출력 토큰: {qaResult.output_tokens?.toLocaleString() || 'N/A'}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -470,8 +476,16 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(version.created_at).toLocaleString('ko-KR')} | {version.model}
+                  <div className="text-xs text-gray-500 space-y-0.5">
+                    <div>
+                      {new Date(version.created_at).toLocaleString('ko-KR')} | {version.model}
+                    </div>
+                    {(version.input_tokens || version.output_tokens) && (
+                      <div>
+                        입력: {version.input_tokens?.toLocaleString() || 'N/A'} |
+                        출력: {version.output_tokens?.toLocaleString() || 'N/A'}
+                      </div>
+                    )}
                   </div>
                   {version.memo && (
                     <div className="mt-2 text-sm text-gray-400">
@@ -511,7 +525,7 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
       {/* 선택된 버전 상세 보기 */}
       {selectedVersion && (
         <div className="mt-6 pt-6 border-t border-dark-border">
-          <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-2">
             <h3 className="text-sm sm:text-base font-semibold text-gray-200 min-w-0 truncate">
               v{selectedVersion.version_number} 스크립트
             </h3>
@@ -530,6 +544,18 @@ function VersionsTab({ projectId, versions, isLoading, onRefresh }) {
                 닫기
               </button>
             </div>
+          </div>
+          {/* 메타 정보 */}
+          <div className="text-xs text-gray-500 mb-4 space-y-0.5">
+            <div>
+              {new Date(selectedVersion.created_at).toLocaleString('ko-KR')} | {selectedVersion.model}
+            </div>
+            {(selectedVersion.input_tokens || selectedVersion.output_tokens) && (
+              <div>
+                입력 토큰: {selectedVersion.input_tokens?.toLocaleString() || 'N/A'} |
+                출력 토큰: {selectedVersion.output_tokens?.toLocaleString() || 'N/A'}
+              </div>
+            )}
           </div>
           <pre className="bg-dark-bg p-4 rounded-lg border border-dark-border overflow-x-auto text-sm text-gray-200 whitespace-pre-wrap break-words">
             {selectedVersion.corrected_script}

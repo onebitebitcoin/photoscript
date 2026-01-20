@@ -21,6 +21,8 @@ class QAVersion(Base):
     # 저장 데이터
     corrected_script = Column(Text, nullable=False)  # 보정된 스크립트만
     model = Column(String(50), nullable=False)  # 사용된 LLM 모델
+    input_tokens = Column(Integer, nullable=True)  # 입력 토큰 수
+    output_tokens = Column(Integer, nullable=True)  # 출력 토큰 수
 
     # 타임스탬프
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)

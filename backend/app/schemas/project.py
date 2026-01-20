@@ -137,6 +137,8 @@ class QAScriptResponse(BaseModel):
     corrected_script: str = Field(..., description="보정된 전체 스크립트")
     change_logs: List[ChangeLogItem] = Field(default_factory=list, description="블록별 변경 내역")
     model: str = Field(..., description="사용된 LLM 모델")
+    input_tokens: Optional[int] = Field(None, description="입력 토큰 수")
+    output_tokens: Optional[int] = Field(None, description="출력 토큰 수")
     created_at: datetime = Field(default_factory=datetime.now, description="검증 시각")
 
 

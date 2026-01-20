@@ -11,6 +11,8 @@ class QAVersionResponse(BaseModel):
     memo: Optional[str]
     corrected_script: str
     model: str
+    input_tokens: Optional[int]
+    output_tokens: Optional[int]
     created_at: datetime
 
     class Config:
@@ -24,6 +26,8 @@ class QAVersionListItem(BaseModel):
     version_name: Optional[str]
     memo: Optional[str]
     model: str
+    input_tokens: Optional[int]
+    output_tokens: Optional[int]
     created_at: datetime
 
     class Config:
